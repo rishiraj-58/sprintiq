@@ -8,6 +8,6 @@ export default function Home() {
       <Navbar />
       <Hero />
       <Features />
-    </main>
+      </main>
   )
 }

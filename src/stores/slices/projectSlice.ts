@@ -1,7 +1,6 @@
 import { StateCreator } from 'zustand';
-import { db } from '@/db';
-import { projects, type Project } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { type Project } from '@/db/schema';
+import { projectService } from '@/services/project';
 
 interface ProjectCreate {
   name: string;
@@ -30,10 +29,7 @@ export const createProjectSlice: StateCreator<ProjectState> = (set) => ({
   fetchProjects: async (workspaceId) => {
     try {
       set({ isLoading: true, error: null });
-      const results = await db
-        .select()
-        .from(projects)
-        .where(eq(projects.workspaceId, workspaceId));
+      const results = await projectService.fetchProjects(workspaceId);
       set({ projects: results });
     } catch (error) {
       set({ error: 'Failed to fetch projects' });
@@ -46,21 +42,10 @@ export const createProjectSlice: StateCreator<ProjectState> = (set) => ({
   createProject: async (data) => {
     try {
       set({ isLoading: true, error: null });
-      const [project] = await db
-        .insert(projects)
-        .values({
-          name: data.name,
-          description: data.description,
-          workspaceId: data.workspaceId,
-          ownerId: data.ownerId,
-          status: 'active',
-        })
-        .returning();
-
+      const project = await projectService.createProject(data);
       set((state) => ({
         projects: [...state.projects, project],
       }));
-
       return project;
     } catch (error) {
       set({ error: 'Failed to create project' });

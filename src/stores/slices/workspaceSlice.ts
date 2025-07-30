@@ -1,7 +1,6 @@
 import { StateCreator } from 'zustand';
-import { db } from '@/db';
-import { workspaces, type Workspace } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { type Workspace } from '@/db/schema';
+import { workspaceService } from '@/services/workspace';
 
 interface WorkspaceCreate {
   name: string;
@@ -20,7 +19,7 @@ export interface WorkspaceState {
   setError: (error: string | null) => void;
 }
 
-export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set, get) => ({
+export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set) => ({
   workspaces: [],
   currentWorkspace: null,
   isLoading: false,
@@ -29,7 +28,7 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set, get) => 
   fetchWorkspaces: async () => {
     try {
       set({ isLoading: true, error: null });
-      const results = await db.select().from(workspaces);
+      const results = await workspaceService.fetchWorkspaces();
       set({ workspaces: results });
     } catch (error) {
       set({ error: 'Failed to fetch workspaces' });
@@ -42,19 +41,10 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set, get) => 
   createWorkspace: async (data) => {
     try {
       set({ isLoading: true, error: null });
-      const [workspace] = await db
-        .insert(workspaces)
-        .values({
-          name: data.name,
-          description: data.description,
-          createdById: data.createdById,
-        })
-        .returning();
-
+      const workspace = await workspaceService.createWorkspace(data);
       set((state) => ({
         workspaces: [...state.workspaces, workspace],
       }));
-
       return workspace;
     } catch (error) {
       set({ error: 'Failed to create workspace' });

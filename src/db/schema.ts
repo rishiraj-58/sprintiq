@@ -13,6 +13,9 @@ export const profiles = pgTable('profiles', {
   lastActiveAt: timestamp('last_active_at')
 });
 
+// Export type for the profiles table
+export type Profile = typeof profiles.$inferSelect;
+
 // Workspaces
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -22,6 +25,8 @@ export const workspaces = pgTable('workspaces', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 });
+
+export type Workspace = typeof workspaces.$inferSelect;
 
 // Workspace Members
 export const workspaceMembers = pgTable('workspace_members', {
@@ -47,6 +52,8 @@ export const projects = pgTable('projects', {
   startDate: timestamp('start_date'),
   dueDate: timestamp('due_date')
 });
+
+export type Project = typeof projects.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {

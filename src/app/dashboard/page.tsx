@@ -1,46 +1,45 @@
 import { getCurrentUserProfile } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { Navbar } from '@/components/layout/Navbar';
 
 export default async function DashboardPage() {
-  // The middleware already protects this page, but we can still fetch the 
-  // profile to display data. If it were ever null, the middleware would have
-  // already redirected.
   const profile = await getCurrentUserProfile();
 
-  // It's safe to assume profile is not null here because of the middleware.
-  // If it is, something else is wrong, but a redirect is not the right fix here.
   if (!profile) {
-    // You could redirect to an error page or just let it fail if this happens.
-    // For now, let's prevent a hard crash.
-    return <div>Could not load user profile.</div>;
+    redirect('/auth/sign-in');
   }
 
   return (
-    <div>
-      <Navbar />
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Your Profile</h2>
-          <div className="space-y-4">
-            <div>
-              <span className="font-medium">Name: </span>
-              {profile.firstName} {profile.lastName}
-            </div>
-            <div>
-              <span className="font-medium">Email: </span>
-              {profile.email}
-            </div>
-            <div>
-              <span className="font-medium">Role: </span>
-              {profile.systemRole}
-            </div>
-            <div>
-              <span className="font-medium">Last Active: </span>
-              {profile.lastActiveAt ? new Date(profile.lastActiveAt).toLocaleString() : 'Never'}
-            </div>
-          </div>
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <p className="text-muted-foreground">
+          Welcome back, {profile.firstName || 'User'}!
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Quick Stats */}
+        <div className="rounded-lg border bg-card p-6">
+          <h3 className="font-semibold">My Tasks</h3>
+          <p className="text-3xl font-bold">0</p>
+        </div>
+        <div className="rounded-lg border bg-card p-6">
+          <h3 className="font-semibold">Active Projects</h3>
+          <p className="text-3xl font-bold">0</p>
+        </div>
+        <div className="rounded-lg border bg-card p-6">
+          <h3 className="font-semibold">Team Members</h3>
+          <p className="text-3xl font-bold">1</p>
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="rounded-lg border">
+        <div className="p-6">
+          <h3 className="font-semibold">Recent Activity</h3>
+          <p className="text-sm text-muted-foreground">
+            No recent activity to show.
+          </p>
         </div>
       </div>
     </div>

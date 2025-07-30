@@ -1,31 +1,44 @@
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+'use client';
+
+import Link from "next/link";
+import { UserButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 export function Navbar() {
+  const router = useRouter();
+
   return (
-    <nav className="w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2">
-          <span className="text-2xl font-bold">SprintIQ</span>
+    <nav className="border-b">
+      <div className="container mx-auto flex h-16 items-center px-4">
+        <Link href="/" className="font-semibold">
+          SprintIQ
         </Link>
-        <div className="flex items-center space-x-4">
-          <Link href="/features">
-            <Button variant="ghost">Features</Button>
-          </Link>
-          <Link href="/pricing">
-            <Button variant="ghost">Pricing</Button>
-          </Link>
-          <Link href="/about">
-            <Button variant="ghost">About</Button>
-          </Link>
-          <Link href="/auth/sign-in">
-            <Button variant="ghost">Sign In</Button>
-          </Link>
-          <Link href="/auth/sign-up">
-            <Button>Get Started</Button>
-          </Link>
+
+        <div className="ml-auto flex items-center space-x-4">
+          <SignedOut>
+            <Link
+              href="/auth/sign-in"
+              className="text-sm font-medium text-gray-700 hover:text-gray-900"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/auth/sign-up"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Sign Up
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <UserButton 
+              afterSignOutUrl="/"
+              afterMultiSessionSingleSignOutUrl="/"
+              afterSwitchSessionUrl="/dashboard"
+              signInUrl="/auth/sign-in"
+            />
+          </SignedIn>
         </div>
       </div>
     </nav>
-  )
+  );
 } 

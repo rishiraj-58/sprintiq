@@ -1,28 +1,17 @@
 import { db } from '@/db';
-import { workspaces, type Workspace } from '@/db/schema';
+import { workspaces, workspaceMembers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
-interface WorkspaceCreate {
-  name: string;
-  description?: string;
-  createdById: string;
-}
-
 export const workspaceService = {
-  fetchWorkspaces: async () => {
-    return await db.select().from(workspaces);
-  },
-
-  createWorkspace: async (data: WorkspaceCreate) => {
-    const [workspace] = await db
-      .insert(workspaces)
-      .values({
-        name: data.name,
-        description: data.description,
-        createdById: data.createdById,
+  fetchUserWorkspaces: async (userId: string) => {
+    return await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        description: workspaces.description,
       })
-      .returning();
-
-    return workspace;
-  }
-}; 
+      .from(workspaces)
+      .innerJoin(workspaceMembers, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.profileId, userId));
+  },
+};

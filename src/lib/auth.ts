@@ -33,11 +33,19 @@ export async function getCurrentUserProfile() {
           avatarUrl: user.imageUrl,
           systemRole: 'member',
           lastActiveAt: new Date(),
+          onboardingCompleted: false,
         })
         .returning();
 
       console.log('Created new profile for user:', userId);
     } else {
+      // If onboarding is complete, only update the last active time
+      if (profile.onboardingCompleted) {
+        await db
+          .update(profiles)
+          .set({ lastActiveAt: new Date() })
+          .where(eq(profiles.id, userId));
+      } else {
       // Update existing profile if user data has changed
       const primaryEmail = user.emailAddresses[0]?.emailAddress;
       if (
@@ -57,15 +65,8 @@ export async function getCurrentUserProfile() {
           })
           .where(eq(profiles.id, userId))
           .returning();
-
-        console.log('Updated profile for user:', userId);
+        }
       }
-
-      // Always update lastActiveAt
-      await db
-        .update(profiles)
-        .set({ lastActiveAt: new Date() })
-        .where(eq(profiles.id, userId));
     }
 
     return profile;

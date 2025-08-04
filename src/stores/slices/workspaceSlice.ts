@@ -1,6 +1,5 @@
 import { StateCreator } from 'zustand';
 import { type Workspace } from '@/db/schema';
-import { workspaceService } from '@/services/workspace';
 
 interface WorkspaceCreate {
   name: string;
@@ -28,30 +27,47 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set) => ({
   fetchWorkspaces: async () => {
     try {
       set({ isLoading: true, error: null });
-      const results = await workspaceService.fetchWorkspaces();
-      set({ workspaces: results });
+      const response = await fetch('/api/workspaces');
+      if (!response.ok) {
+        throw new Error('Failed to fetch workspaces');
+      }
+      const results = await response.json();
+      set({ workspaces: results, isLoading: false });
     } catch (error) {
-      set({ error: 'Failed to fetch workspaces' });
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
       console.error('Error fetching workspaces:', error);
-    } finally {
-      set({ isLoading: false });
     }
   },
 
   createWorkspace: async (data) => {
     try {
       set({ isLoading: true, error: null });
-      const workspace = await workspaceService.createWorkspace(data);
+      const response = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create workspace');
+      }
+
+      const newWorkspace = await response.json();
+
+      // Add the new workspace to the state and set it as current
       set((state) => ({
-        workspaces: [...state.workspaces, workspace],
+        workspaces: [...state.workspaces, newWorkspace],
+        currentWorkspace: newWorkspace,
+        isLoading: false,
       }));
-      return workspace;
+
+      return newWorkspace;
     } catch (error) {
-      set({ error: 'Failed to create workspace' });
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
       console.error('Error creating workspace:', error);
       throw error;
-    } finally {
-      set({ isLoading: false });
     }
   },
 

@@ -8,6 +8,7 @@ export const profiles = pgTable('profiles', {
   email: varchar('email', { length: 255 }),
   avatarUrl: text('avatar_url'),
   systemRole: varchar('system_role', { length: 50 }).notNull().default('member'),
+  onboardingCompleted: boolean('onboarding_completed').notNull().default(false), // <-- ADD THIS LINE
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   lastActiveAt: timestamp('last_active_at')

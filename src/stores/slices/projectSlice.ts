@@ -1,6 +1,5 @@
 import { StateCreator } from 'zustand';
 import { type Project } from '@/db/schema';
-import { projectService } from '@/services/project';
 
 interface ProjectCreate {
   name: string;
@@ -27,32 +26,47 @@ export const createProjectSlice: StateCreator<ProjectState> = (set) => ({
   error: null,
 
   fetchProjects: async (workspaceId) => {
+    if (!workspaceId) return;
     try {
       set({ isLoading: true, error: null });
-      const results = await projectService.fetchProjects(workspaceId);
-      set({ projects: results });
+      // Fetch from the API route, passing workspaceId as a query param
+      const response = await fetch(`/api/projects?workspaceId=${workspaceId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch projects');
+      }
+      const results = await response.json();
+      set({ projects: results, isLoading: false });
     } catch (error) {
-      set({ error: 'Failed to fetch projects' });
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
       console.error('Error fetching projects:', error);
-    } finally {
-      set({ isLoading: false });
     }
   },
 
   createProject: async (data) => {
     try {
       set({ isLoading: true, error: null });
-      const project = await projectService.createProject(data);
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create project');
+      }
+
+      const newProject = await response.json();
       set((state) => ({
-        projects: [...state.projects, project],
+        projects: [...state.projects, newProject],
+        isLoading: false,
       }));
-      return project;
+      return newProject;
     } catch (error) {
-      set({ error: 'Failed to create project' });
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
       console.error('Error creating project:', error);
       throw error;
-    } finally {
-      set({ isLoading: false });
     }
   },
 

@@ -4,8 +4,8 @@ export default function Page() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <SignUp 
-        afterSignUpUrl="/onboarding"
-        redirectUrl="/onboarding"
+        afterSignUpUrl="/auth/callback"
+        redirectUrl="/auth/callback"
         routing="path"
         path="/auth/sign-up"
       />

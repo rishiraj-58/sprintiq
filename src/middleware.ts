@@ -4,7 +4,9 @@ const isPublicRoute = createRouteMatcher([
   '/', 
   '/auth/sign-in(.*)',
   '/auth/sign-up(.*)',
-  '/api/webhooks/clerk'
+  '/api/webhooks/clerk',
+  '/api/invitations/validate(.*)',
+  '/join(.*)'
 ]);
 
 // Add the onboarding route to the list of public routes for now

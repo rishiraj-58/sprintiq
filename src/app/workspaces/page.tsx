@@ -2,6 +2,7 @@ import { getCurrentUserProfile } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { workspaceService } from '@/services/workspace';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { TestInvitationForm } from '@/components/workspaces/TestInvitationForm';
 import Link from 'next/link';
 
 export default async function WorkspacesPage() {
@@ -24,6 +25,25 @@ export default async function WorkspacesPage() {
           Create Workspace
         </button>
       </div>
+
+      {/* Test Email Invitation Section */}
+      {userWorkspaces.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold">Test Email Invitation</h3>
+          <p className="text-sm text-muted-foreground">
+            Use this form to test the email invitation system. Select a workspace and enter a test email address.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            {userWorkspaces.slice(0, 3).map((ws) => (
+              <TestInvitationForm 
+                key={ws.id} 
+                workspaceId={ws.id} 
+                workspaceName={ws.name} 
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {userWorkspaces.length === 0 ? (

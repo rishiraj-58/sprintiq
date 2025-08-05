@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { projectService } from '@/services/project';
+import { db } from '@/db';
+import { workspaceMembers } from '@/db/schema';
+import { and, eq } from 'drizzle-orm'; 
 
 // Handler to get projects for a specific workspace
 export async function GET(req: Request) {
@@ -13,7 +16,21 @@ export async function GET(req: Request) {
       return new NextResponse('Workspace ID is required', { status: 400 });
     }
 
-    // You might want to add a check here to ensure the user is a member of this workspace
+    // Check if the user is a member of the requested workspace
+    const [membership] = await db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.profileId, profile.id),
+          eq(workspaceMembers.workspaceId, workspaceId)
+        )
+      );
+
+    // If no membership is found, the user is not authorized
+    if (!membership) {
+      return new NextResponse("Forbidden: You are not a member of this workspace", { status: 403 });
+    }
     
     const projects = await projectService.fetchProjects(workspaceId);
     return NextResponse.json(projects);

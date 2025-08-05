@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 
 interface OnboardingFormProps {
   profile: Profile;
@@ -24,29 +26,54 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
   const [lastName, setLastName] = useState(profile.lastName || '');
   const [intent, setIntent] = useState<'create' | 'join' | 'explore'>('create');
   const [workspaceName, setWorkspaceName] = useState('');
+  const [invites, setInvites] = useState('');
 
   const handleNextStep = () => setStep(step + 1);
   const handlePrevStep = () => setStep(step - 1);
 
-  const handleSubmit = async () => {
+  const handleFinishOnboarding = async () => {
     setIsLoading(true);
-    
-    const response = await fetch('/api/onboarding', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        firstName,
-        lastName,
-        intent,
-        workspaceName,
-      }),
-    });
 
-    if (response.ok) {
+    try {
+      console.log('Starting onboarding process...');
+      
+      // Parse invites if provided
+      let parsedInvites: Array<{ email: string; role: string }> = [];
+      if (invites.trim() !== '') {
+        parsedInvites = invites.split(',').map(email => ({ 
+          email: email.trim(), 
+          role: 'member' 
+        }));
+      }
+
+      console.log('Parsed invites:', parsedInvites);
+
+      // Send all onboarding data including invites to the server
+      const onboardingResponse = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          intent,
+          workspaceName,
+          invites: parsedInvites,
+        }),
+      });
+
+      if (!onboardingResponse.ok) {
+        console.error('Onboarding failed');
+        setIsLoading(false);
+        return;
+      }
+
+      const result = await onboardingResponse.json();
+      console.log('Onboarding completed:', result);
+
+      // Redirect to the dashboard
       router.push('/dashboard');
-    } else {
-      // Handle error (e.g., show a toast notification)
-      console.error('Onboarding failed');
+    } catch (error) {
+      console.error('Onboarding error:', error);
       setIsLoading(false);
     }
   };
@@ -98,11 +125,19 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
                 <Label htmlFor="explore">I'm just exploring and want a personal workspace.</Label>
               </div>
             </RadioGroup>
+            {intent === 'join' && (
+                <Alert>
+                    <AlertTitle>Check your Email!</AlertTitle>
+                    <AlertDescription>
+                        To join an existing workspace, please use the invitation link sent to your email. If you don't have one, ask your workspace manager to invite you.
+                    </AlertDescription>
+                </Alert>
+            )}
           </CardContent>
           <CardFooter className="justify-between">
             <Button variant="outline" onClick={handlePrevStep}>Back</Button>
-            <Button onClick={intent === 'create' || intent === 'explore' ? handleNextStep : handleSubmit}>
-              {intent === 'create' || intent === 'explore' ? 'Next' : 'Finish'}
+            <Button onClick={handleNextStep} disabled={intent === 'join'}>
+              Next
             </Button>
           </CardFooter>
         </>
@@ -131,11 +166,37 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
           </CardContent>
           <CardFooter className="justify-between">
             <Button variant="outline" onClick={handlePrevStep}>Back</Button>
-            <Button onClick={handleSubmit} disabled={isLoading || !workspaceName}>
-              {isLoading ? <Spinner size="sm" /> : 'Finish Setup'}
+            <Button onClick={handleNextStep} disabled={!workspaceName}>
+              Next
             </Button>
           </CardFooter>
       </>
+      )}
+
+{step === 4 && (intent === 'create' || intent === 'explore') && (
+        <>
+          <CardHeader>
+            <CardTitle>Invite Your Team (Optional)</CardTitle>
+            <CardDescription>Enter your team members' email addresses, separated by commas. They will be invited as members.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="invites">Emails</Label>
+              <Textarea 
+                id="invites" 
+                value={invites} 
+                onChange={(e) => setInvites(e.target.value)} 
+                placeholder="e.g., colleague@example.com, friend@work.com" 
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="justify-between">
+            <Button variant="outline" onClick={handlePrevStep}>Back</Button>
+            <Button onClick={handleFinishOnboarding} disabled={isLoading}>
+              {isLoading ? <Spinner size="sm" /> : 'Finish & Go to Dashboard'}
+            </Button>
+          </CardFooter>
+        </>
       )}
     </Card>
   );

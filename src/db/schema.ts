@@ -40,6 +40,18 @@ export const workspaceMembers = pgTable('workspace_members', {
   updatedAt: timestamp('updated_at').defaultNow()
 });
 
+// Invitations
+export const invitations = pgTable('invitations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }).notNull(),
+  role: varchar('role', { length: 50 }).notNull().default('member'),
+  token: uuid('token').defaultRandom().notNull().unique(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending', 'accepted', 'expired'
+  invitedById: varchar('invited_by_id', { length: 255 }).notNull().references(() => profiles.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Projects
 export const projects = pgTable('projects', {
   id: uuid('id').defaultRandom().primaryKey(),

@@ -67,6 +67,7 @@ export const projects = pgTable('projects', {
 });
 
 export type Project = typeof projects.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {

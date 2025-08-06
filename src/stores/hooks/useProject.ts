@@ -7,6 +7,8 @@ export const useProject = () => {
   const error = useStore((state) => state.error);
   const fetchProjects = useStore((state) => state.fetchProjects);
   const createProject = useStore((state) => state.createProject);
+  const updateProject = useStore((state) => state.updateProject);
+  const deleteProject = useStore((state) => state.deleteProject);
   const setCurrentProject = useStore((state) => state.setCurrentProject);
 
   return {
@@ -16,6 +18,8 @@ export const useProject = () => {
     error,
     fetchProjects,
     createProject,
+    updateProject,
+    deleteProject,
     setCurrentProject,
   };
 }; 

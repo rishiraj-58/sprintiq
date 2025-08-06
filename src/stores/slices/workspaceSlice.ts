@@ -11,10 +11,12 @@ export interface WorkspaceState {
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
   isLoading: boolean;
+  isInitializing: boolean;
   error: string | null;
-  fetchWorkspaces: () => Promise<void>;
+  fetchWorkspaces: () => Promise<Workspace[]>;
   createWorkspace: (data: WorkspaceCreate) => Promise<Workspace>;
   setCurrentWorkspace: (workspace: Workspace | null) => void;
+  setInitializing: (isInitializing: boolean) => void;
   setError: (error: string | null) => void;
 }
 
@@ -22,6 +24,7 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set) => ({
   workspaces: [],
   currentWorkspace: null,
   isLoading: false,
+  isInitializing: true,
   error: null,
 
   fetchWorkspaces: async () => {
@@ -33,10 +36,12 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set) => ({
       }
       const results = await response.json();
       set({ workspaces: results, isLoading: false });
+      return results;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ error: errorMessage, isLoading: false });
       console.error('Error fetching workspaces:', error);
+      throw error;
     }
   },
 
@@ -73,6 +78,10 @@ export const createWorkspaceSlice: StateCreator<WorkspaceState> = (set) => ({
 
   setCurrentWorkspace: (workspace) => {
     set({ currentWorkspace: workspace });
+  },
+
+  setInitializing: (isInitializing) => {
+    set({ isInitializing });
   },
 
   setError: (error) => {

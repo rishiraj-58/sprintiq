@@ -8,6 +8,12 @@ interface ProjectCreate {
   ownerId: string;
 }
 
+interface ProjectUpdate {
+  name?: string;
+  description?: string;
+  status?: string;
+}
+
 export interface ProjectState {
   projects: Project[];
   currentProject: Project | null;
@@ -15,11 +21,13 @@ export interface ProjectState {
   error: string | null;
   fetchProjects: (workspaceId: string) => Promise<void>;
   createProject: (data: ProjectCreate) => Promise<Project>;
+  updateProject: (projectId: string, data: ProjectUpdate) => Promise<Project>;
+  deleteProject: (projectId: string) => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
   setError: (error: string | null) => void;
 }
 
-export const createProjectSlice: StateCreator<ProjectState> = (set) => ({
+export const createProjectSlice: StateCreator<ProjectState> = (set, get) => ({
   projects: [],
   currentProject: null,
   isLoading: false,
@@ -66,6 +74,60 @@ export const createProjectSlice: StateCreator<ProjectState> = (set) => ({
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ error: errorMessage, isLoading: false });
       console.error('Error creating project:', error);
+      throw error;
+    }
+  },
+
+  updateProject: async (projectId, data) => {
+    try {
+      set({ isLoading: true, error: null });
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update project');
+      }
+
+      const updatedProject = await response.json();
+      set((state) => ({
+        projects: state.projects.map((project) =>
+          project.id === projectId ? updatedProject : project
+        ),
+        currentProject: state.currentProject?.id === projectId ? updatedProject : state.currentProject,
+        isLoading: false,
+      }));
+      return updatedProject;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
+      console.error('Error updating project:', error);
+      throw error;
+    }
+  },
+
+  deleteProject: async (projectId) => {
+    try {
+      set({ isLoading: true, error: null });
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete project');
+      }
+
+      set((state) => ({
+        projects: state.projects.filter((project) => project.id !== projectId),
+        currentProject: state.currentProject?.id === projectId ? null : state.currentProject,
+        isLoading: false,
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ error: errorMessage, isLoading: false });
+      console.error('Error deleting project:', error);
       throw error;
     }
   },

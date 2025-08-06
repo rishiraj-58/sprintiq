@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/stores/hooks/useAuth';
-import { PermissionManager } from '@/lib/permissions';
-import { RoleCapability } from '@/types/database';
+import { type RoleCapability } from '@/types/database';
 
 export const usePermissions = (contextType: 'workspace' | 'project', contextId?: string) => {
   const { profile } = useAuth();
@@ -10,12 +9,26 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
 
   useEffect(() => {
     const fetchCapabilities = async () => {
-      if (profile?.id && contextId) {
-        setIsLoading(true);
-        const userCapabilities = await PermissionManager.getUserCapabilities(profile.id, contextId);
-        setCapabilities(userCapabilities);
-        setIsLoading(false);
-      }
+              if (profile?.id && contextId) {
+          setIsLoading(true);
+          try {
+            // Fetch from the API instead of calling PermissionManager directly
+            const response = await fetch(`/api/permissions?contextId=${contextId}`);
+            if (response.ok) {
+              const data = await response.json();
+              setCapabilities(data.capabilities || []);
+            } else {
+              setCapabilities([]);
+            }
+          } catch (error) {
+            console.error("Failed to fetch permissions", error);
+            setCapabilities([]);
+          } finally {
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
+        }
     };
 
     fetchCapabilities();

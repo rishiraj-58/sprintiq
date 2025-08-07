@@ -12,11 +12,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
 import { Calendar, Clock, User, ArrowLeft, Edit, Save, X } from 'lucide-react';
 import { useTask } from '@/stores/hooks/useTask';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/use-toast';
+import { CommentSection } from '@/components/tasks/CommentSection';
+import { TaskAttachmentUploader } from '@/components/tasks/TaskAttachmentUploader';
 
 interface TaskDetailData {
   id: string;
@@ -36,16 +39,16 @@ interface TaskDetailData {
   };
   assignee: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
     avatarUrl: string | null;
   } | null;
   creator: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
     avatarUrl: string | null;
   } | null;
 }
@@ -59,7 +62,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const { toast } = useToast();
   const { updateTask } = useTask();
   const { workspaceMembers, fetchWorkspaceMembers, isMembersLoading } = useWorkspace();
-  const { canEdit, canDelete } = usePermissions('workspace', task.workspaceId);
+  const { canEdit, canDelete, isLoading: isPermissionsLoading } = usePermissions('workspace', task.workspaceId);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -183,27 +186,38 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           </div>
         </div>
         
-        {canEdit && (
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
-                <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleSave} disabled={isSaving || !editTitle.trim()}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? 'Saving...' : 'Save'}
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" onClick={() => setIsEditing(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <>
+              <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
               </Button>
-            )}
-          </div>
-        )}
+              <Button size="sm" onClick={handleSave} disabled={isSaving || !editTitle.trim()}>
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          ) : (
+            <Button 
+              size="sm" 
+              onClick={() => setIsEditing(true)} 
+              disabled={isPermissionsLoading || !canEdit}
+            >
+              {isPermissionsLoading ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -394,6 +408,22 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Attachments Section */}
+      <div className="mt-8">
+        <TaskAttachmentUploader 
+          taskId={task.id} 
+          workspaceId={task.workspaceId}
+        />
+      </div>
+
+      {/* Comments Section */}
+      <div className="mt-8">
+        <CommentSection 
+          taskId={task.id} 
+          workspaceId={task.workspaceId}
+        />
       </div>
     </div>
   );

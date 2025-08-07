@@ -76,6 +76,9 @@ export async function GET(request: Request) {
     const profile = await requireAuth();
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
+    const status = searchParams.get('status');
+    const priority = searchParams.get('priority');
+    const assigneeId = searchParams.get('assigneeId');
 
     if (!projectId) {
       return new NextResponse('Project ID is required', { status: 400 });
@@ -112,6 +115,25 @@ export async function GET(request: Request) {
       return new NextResponse('Forbidden: You do not have permission to view tasks', { status: 403 });
     }
 
+    // Build filter conditions
+    const filterConditions = [eq(tasks.projectId, projectId)];
+    
+    if (status) {
+      filterConditions.push(eq(tasks.status, status));
+    }
+    
+    if (priority) {
+      filterConditions.push(eq(tasks.priority, priority));
+    }
+    
+    if (assigneeId) {
+      if (assigneeId === 'unassigned') {
+        filterConditions.push(eq(tasks.assigneeId, null as any));
+      } else {
+        filterConditions.push(eq(tasks.assigneeId, assigneeId));
+      }
+    }
+
     // Fetch all tasks for the project with assignee details
     const assigneeProfiles = alias(profiles, 'assignee_profiles');
     
@@ -138,7 +160,7 @@ export async function GET(request: Request) {
       })
       .from(tasks)
       .leftJoin(assigneeProfiles, eq(tasks.assigneeId, assigneeProfiles.id))
-      .where(eq(tasks.projectId, projectId));
+      .where(and(...filterConditions));
 
     return NextResponse.json(projectTasks);
 

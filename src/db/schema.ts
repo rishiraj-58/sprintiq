@@ -68,6 +68,8 @@ export const projects = pgTable('projects', {
 
 export type Project = typeof projects.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
+export type TaskAttachment = typeof taskAttachments.$inferSelect;
+export type Comment = typeof comments.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {
@@ -137,4 +139,18 @@ export const documents = pgTable('documents', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   version: integer('version').notNull().default(1)
+});
+
+// Task Attachments
+export const taskAttachments = pgTable('task_attachments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 200 }).notNull(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  uploaderId: varchar('uploader_id', { length: 255 }).notNull().references(() => profiles.id),
+  fileUrl: text('file_url').notNull(),
+  fileType: varchar('file_type', { length: 50 }).notNull(),
+  fileSize: integer('file_size').notNull(), // in bytes
+  s3Key: text('s3_key').notNull(), // S3 object key for deletion
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
 }); 

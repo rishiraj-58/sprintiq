@@ -14,6 +14,7 @@ import { useUser } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
 import { KanbanBoard } from '@/components/tasks/KanbanBoard';
 import { CreateTaskForm } from '@/components/tasks/CreateTaskForm';
+import { TaskFilters } from '@/components/tasks/TaskFilters';
 
 interface ProjectDetailClientPageProps {
   project: Project;
@@ -222,6 +223,10 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
         {/* Tasks Tab Content */}
         <TabsContent value="tasks" className="space-y-4">
+          <TaskFilters 
+            projectId={project.id} 
+            workspaceId={project.workspaceId}
+          />
           <KanbanBoard projectId={project.id} />
         </TabsContent>
 

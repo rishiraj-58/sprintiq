@@ -5,7 +5,7 @@ import { type RoleCapability } from '@/types/database';
 export const usePermissions = (contextType: 'workspace' | 'project', contextId?: string) => {
   const { user } = useUser();
   const [capabilities, setCapabilities] = useState<RoleCapability[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   console.log('usePermissions hook - state:', { 
     userId: user?.id, 
@@ -47,13 +47,10 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
       }
     };
 
-    // Always try to fetch if we have the required data
+    // Only fetch if we have the required data
     if (user?.id && contextId) {
       console.log('usePermissions: Calling fetchCapabilities');
       fetchCapabilities();
-    } else {
-      console.log('usePermissions: Setting loading to false');
-      setIsLoading(false);
     }
   }, [user?.id, contextId]);
 

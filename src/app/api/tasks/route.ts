@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { tasks, projects, workspaceMembers } from '@/db/schema';
+import { tasks, projects, workspaceMembers, profiles } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { PermissionManager } from '@/lib/permissions';
 
 export async function POST(request: Request) {
@@ -111,10 +112,32 @@ export async function GET(request: Request) {
       return new NextResponse('Forbidden: You do not have permission to view tasks', { status: 403 });
     }
 
-    // Fetch all tasks for the project
+    // Fetch all tasks for the project with assignee details
+    const assigneeProfiles = alias(profiles, 'assignee_profiles');
+    
     const projectTasks = await db
-      .select()
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        priority: tasks.priority,
+        projectId: tasks.projectId,
+        assigneeId: tasks.assigneeId,
+        creatorId: tasks.creatorId,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        dueDate: tasks.dueDate,
+        assignee: {
+          id: assigneeProfiles.id,
+          firstName: assigneeProfiles.firstName,
+          lastName: assigneeProfiles.lastName,
+          email: assigneeProfiles.email,
+          avatarUrl: assigneeProfiles.avatarUrl,
+        },
+      })
       .from(tasks)
+      .leftJoin(assigneeProfiles, eq(tasks.assigneeId, assigneeProfiles.id))
       .where(eq(tasks.projectId, projectId));
 
     return NextResponse.json(projectTasks);

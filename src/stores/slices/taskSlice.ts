@@ -1,6 +1,17 @@
 import { StateCreator } from 'zustand';
 import { type Task } from '@/db/schema';
 
+interface TaskWithAssignee extends Omit<Task, 'assigneeId'> {
+  assigneeId: string | null;
+  assignee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
 interface TaskCreate {
   title: string;
   description?: string;
@@ -18,21 +29,56 @@ interface TaskUpdate {
   assigneeId?: string;
 }
 
+interface TaskWithDetails {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  projectId: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  dueDate: Date | null;
+  workspaceId: string;
+  assignee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+  creator: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
 export interface TaskState {
-  tasks: Task[];
+  tasks: TaskWithAssignee[];
+  currentTask: TaskWithDetails | null;
   isLoading: boolean;
+  isCurrentTaskLoading: boolean;
   error: string | null;
+  currentTaskError: string | null;
   fetchTasks: (projectId: string) => Promise<void>;
+  fetchTaskById: (taskId: string) => Promise<void>;
   createTask: (data: TaskCreate) => Promise<Task>;
   updateTask: (taskId: string, data: TaskUpdate) => Promise<Task>;
   deleteTask: (taskId: string) => Promise<void>;
+  setCurrentTask: (task: TaskWithDetails | null) => void;
   setError: (error: string | null) => void;
 }
 
 export const createTaskSlice: StateCreator<TaskState> = (set, get) => ({
   tasks: [],
+  currentTask: null,
   isLoading: false,
+  isCurrentTaskLoading: false,
   error: null,
+  currentTaskError: null,
 
   fetchTasks: async (projectId) => {
     try {
@@ -127,6 +173,26 @@ export const createTaskSlice: StateCreator<TaskState> = (set, get) => ({
       console.error('Error deleting task:', error);
       throw error;
     }
+  },
+
+  fetchTaskById: async (taskId) => {
+    try {
+      set({ isCurrentTaskLoading: true, currentTaskError: null });
+      const response = await fetch(`/api/tasks/${taskId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch task details');
+      }
+      const task = await response.json();
+      set({ currentTask: task, isCurrentTaskLoading: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ currentTaskError: errorMessage, isCurrentTaskLoading: false });
+      console.error('Error fetching task by ID:', error);
+    }
+  },
+
+  setCurrentTask: (task) => {
+    set({ currentTask: task });
   },
 
   setError: (error) => {

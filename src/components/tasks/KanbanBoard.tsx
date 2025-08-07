@@ -83,7 +83,11 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
               </div>
             ) : (
               column.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
+                <TaskCard 
+                  key={task.id} 
+                  task={task} 
+                  assignee={task.assignee} 
+                />
               ))
             )}
           </div>

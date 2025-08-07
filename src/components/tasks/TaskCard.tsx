@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { type Task } from '@/db/schema';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MoreHorizontal, User } from 'lucide-react';
 import {
   DropdownMenu,
@@ -12,15 +14,26 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useTask } from '@/stores/hooks/useTask';
+import { useWorkspace } from '@/stores/hooks/useWorkspace';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/use-toast';
 
 interface TaskCardProps {
   task: Task;
+  assignee?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
   onEdit?: (task: Task) => void;
 }
 
-export function TaskCard({ task, onEdit }: TaskCardProps) {
+export function TaskCard({ task, assignee, onEdit }: TaskCardProps) {
   const { updateTask, deleteTask } = useTask();
+  const { currentWorkspace } = useWorkspace();
+  const { canEdit, canDelete } = usePermissions('workspace', currentWorkspace?.id);
   const { toast } = useToast();
 
   const getPriorityColor = (priority: string) => {
@@ -82,40 +95,47 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <CardTitle className="text-sm font-medium line-clamp-2">
-            {task.title}
-          </CardTitle>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(task)}>
-                  Edit
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => handleStatusChange('todo')}>
-                Move to To Do
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange('in_progress')}>
-                Move to In Progress
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleStatusChange('done')}>
-                Move to Done
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDelete} className="text-destructive">
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </CardHeader>
+    <Link href={`/tasks/${task.id}`} className="block">
+      <Card className="hover:shadow-md transition-shadow cursor-pointer">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <CardTitle className="text-sm font-medium line-clamp-2">
+              {task.title}
+            </CardTitle>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEdit && canEdit && (
+                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); onEdit(task); }}>
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <>
+                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleStatusChange('todo'); }}>
+                      Move to To Do
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleStatusChange('in_progress'); }}>
+                      Move to In Progress
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleStatusChange('done'); }}>
+                      Move to Done
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleDelete(); }} className="text-destructive">
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </CardHeader>
       <CardContent className="pt-0">
         {task.description && (
           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
@@ -135,12 +155,24 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
             </Badge>
           </div>
           
-          {task.assigneeId && (
+          {assignee ? (
+            <div className="flex items-center gap-2">
+              <Avatar className="w-6 h-6">
+                <AvatarImage src={assignee.avatarUrl || undefined} />
+                <AvatarFallback className="text-xs">
+                  {assignee.firstName?.[0]}{assignee.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">
+                {assignee.firstName} {assignee.lastName}
+              </span>
+            </div>
+          ) : task.assigneeId ? (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
               <span>Assigned</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="mt-2 text-xs text-muted-foreground">
@@ -148,5 +180,6 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
         </div>
       </CardContent>
     </Card>
+    </Link>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTask } from '@/stores/hooks/useTask';
+import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/components/ui/use-toast';
 
 interface CreateTaskFormProps {
@@ -30,10 +32,19 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [status, setStatus] = useState('todo');
+  const [assigneeId, setAssigneeId] = useState<string>('unassigned');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createTask } = useTask();
+  const { currentWorkspace, workspaceMembers, fetchWorkspaceMembers, isMembersLoading } = useWorkspace();
   const { toast } = useToast();
+
+  // Fetch workspace members when the modal opens and we have a current workspace
+  useEffect(() => {
+    if (open && currentWorkspace?.id && workspaceMembers.length === 0) {
+      fetchWorkspaceMembers(currentWorkspace.id);
+    }
+  }, [open, currentWorkspace?.id, workspaceMembers.length, fetchWorkspaceMembers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +67,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
         priority,
         status,
         projectId,
+        assigneeId: assigneeId === 'unassigned' ? undefined : assigneeId,
       });
 
       toast({
@@ -68,6 +80,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setDescription('');
       setPriority('medium');
       setStatus('todo');
+      setAssigneeId('unassigned');
       setOpen(false);
     } catch (error) {
       toast({
@@ -87,6 +100,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setDescription('');
       setPriority('medium');
       setStatus('todo');
+      setAssigneeId('unassigned');
     }
     setOpen(newOpen);
   };
@@ -126,6 +140,31 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
               disabled={isSubmitting}
               rows={3}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="assignee">Assignee</Label>
+            <Select value={assigneeId} onValueChange={setAssigneeId} disabled={isSubmitting || isMembersLoading}>
+              <SelectTrigger>
+                <SelectValue placeholder={isMembersLoading ? "Loading members..." : "Select assignee (optional)"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {workspaceMembers.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="w-5 h-5">
+                        <AvatarImage src={member.avatarUrl || undefined} />
+                        <AvatarFallback className="text-xs">
+                          {member.firstName?.[0]}{member.lastName?.[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{member.firstName} {member.lastName}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

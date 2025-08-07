@@ -8,11 +8,17 @@ export function Navbar() {
   const router = useRouter();
 
   return (
-    <nav className="border-b">
+    <nav className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center px-4">
         <Link href="/" className="font-semibold">
-          SprintIQ
+          <span className="inline-block rounded bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">SprintIQ</span>
         </Link>
+
+        <div className="ml-6 hidden items-center space-x-6 text-sm text-muted-foreground md:flex">
+          <Link href="/projects" className="hover:text-foreground">Projects</Link>
+          <Link href="/workspaces" className="hover:text-foreground">Workspaces</Link>
+          <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
+        </div>
 
         <div className="ml-auto flex items-center space-x-4">
           <SignedOut>

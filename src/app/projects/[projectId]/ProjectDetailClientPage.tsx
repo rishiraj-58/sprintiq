@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { KanbanBoard } from '@/components/tasks/KanbanBoard';
 import { CreateTaskForm } from '@/components/tasks/CreateTaskForm';
 import { TaskFilters } from '@/components/tasks/TaskFilters';
+import { AIChatFloating } from '@/components/ai/AIChatFloating';
 
 interface ProjectDetailClientPageProps {
   project: Project;
@@ -281,6 +282,9 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Floating AI Assistant */}
+      <AIChatFloating projectId={project.id} />
     </div>
   );
 }

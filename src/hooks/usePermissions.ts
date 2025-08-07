@@ -1,38 +1,61 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/stores/hooks/useAuth';
+import { useUser } from '@clerk/nextjs';
 import { type RoleCapability } from '@/types/database';
 
 export const usePermissions = (contextType: 'workspace' | 'project', contextId?: string) => {
-  const { profile } = useAuth();
+  const { user } = useUser();
   const [capabilities, setCapabilities] = useState<RoleCapability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  console.log('usePermissions hook - state:', { 
+    userId: user?.id, 
+    contextId, 
+    contextType, 
+    capabilities,
+    isLoading 
+  });
+
+
+    useEffect(() => {
+    console.log('usePermissions useEffect triggered:', { userId: user?.id, contextId });
+    
     const fetchCapabilities = async () => {
-              if (profile?.id && contextId) {
-          setIsLoading(true);
-          try {
-            // Fetch from the API instead of calling PermissionManager directly
-            const response = await fetch(`/api/permissions?contextId=${contextId}`);
-            if (response.ok) {
-              const data = await response.json();
-              setCapabilities(data.capabilities || []);
-            } else {
-              setCapabilities([]);
-            }
-          } catch (error) {
-            console.error("Failed to fetch permissions", error);
+      if (user?.id && contextId) {
+        console.log('usePermissions: Making API call to /api/permissions');
+        setIsLoading(true);
+        try {
+          // Fetch from the API instead of calling PermissionManager directly
+          const response = await fetch(`/api/permissions?contextId=${contextId}`);
+          console.log('usePermissions: API response status:', response.status);
+          if (response.ok) {
+            const data = await response.json();
+            console.log('usePermissions: Received capabilities:', data.capabilities);
+            setCapabilities(data.capabilities || []);
+          } else {
+            console.log('usePermissions: API failed');
             setCapabilities([]);
-          } finally {
-            setIsLoading(false);
           }
-        } else {
+        } catch (error) {
+          console.error("Failed to fetch permissions", error);
+          setCapabilities([]);
+        } finally {
           setIsLoading(false);
         }
+      } else {
+        console.log('usePermissions: Not fetching - missing data');
+        setIsLoading(false);
+      }
     };
 
-    fetchCapabilities();
-  }, [profile, contextType, contextId]);
+    // Always try to fetch if we have the required data
+    if (user?.id && contextId) {
+      console.log('usePermissions: Calling fetchCapabilities');
+      fetchCapabilities();
+    } else {
+      console.log('usePermissions: Setting loading to false');
+      setIsLoading(false);
+    }
+  }, [user?.id, contextId]);
 
   return {
     isLoading,

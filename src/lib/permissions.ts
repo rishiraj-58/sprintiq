@@ -31,7 +31,9 @@ export class PermissionManager {
         )
       );
 
-    if (!membership) return [];
+    if (!membership) {
+      return [];
+    }
     
     if (membership.role === 'owner') {
       return DEFAULT_CAPABILITY_SETS.OWNER;

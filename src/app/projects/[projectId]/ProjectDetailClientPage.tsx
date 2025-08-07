@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useUser } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
 import { KanbanBoard } from '@/components/tasks/KanbanBoard';
 import { CreateTaskForm } from '@/components/tasks/CreateTaskForm';
@@ -21,9 +22,28 @@ interface ProjectDetailClientPageProps {
 export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { canEdit, canDelete, canCreate } = usePermissions('workspace', project.workspaceId);
+  const { canEdit, canDelete, canCreate, isLoading: isPermissionsLoading } = usePermissions('workspace', project.workspaceId);
+
+  // Debug logging
+  console.log('ProjectDetailClientPage Debug:', {
+    projectId: project.id,
+    workspaceId: project.workspaceId,
+    canCreate,
+    canEdit,
+    canDelete,
+    isPermissionsLoading,
+    activeTab
+  });
+
+  console.log('ProjectDetailClientPage: Calling usePermissions with:', {
+    contextType: 'workspace',
+    contextId: project.workspaceId,
+    clerkUserId: user?.id,
+    clerkUserLoaded: !!user
+  });
 
   const handleDeleteProject = async () => {
     if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
@@ -109,13 +129,18 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           </TabsList>
 
           {/* Create Task Button - Only show in Tasks tab */}
-          {activeTab === 'tasks' && canCreate && (
-            <CreateTaskForm projectId={project.id}>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Task
-              </Button>
-            </CreateTaskForm>
+          {activeTab === 'tasks' && (
+            <div className="flex items-center gap-2">
+              <CreateTaskForm projectId={project.id}>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Task
+                </Button>
+              </CreateTaskForm>
+              <div className="text-sm text-muted-foreground">
+                Debug: canCreate={canCreate.toString()}, loading={isPermissionsLoading.toString()}
+              </div>
+            </div>
           )}
         </div>
 

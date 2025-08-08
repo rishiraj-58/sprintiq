@@ -62,7 +62,11 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const { toast } = useToast();
   const { updateTask } = useTask();
   const { workspaceMembers, fetchWorkspaceMembers, isMembersLoading } = useWorkspace();
-  const { canEdit, canDelete, isLoading: isPermissionsLoading } = usePermissions('workspace', task.workspaceId);
+  const ws = usePermissions('workspace', task.workspaceId);
+  const proj = usePermissions('project', task.project.id);
+  const canEdit = ws.canEdit || proj.canEdit;
+  const canDelete = ws.canDelete || proj.canDelete;
+  const isPermissionsLoading = ws.isLoading || proj.isLoading;
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);

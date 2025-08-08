@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/stores/hooks/useWorkspace";
 import { useProject } from "@/stores/hooks/useProject";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 
 export function Navbar() {
   const router = useRouter();
@@ -55,40 +56,77 @@ export function Navbar() {
           <span className="inline-block rounded bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">SprintIQ</span>
         </Link>
 
-        {/* Workspace Switcher */}
+        {/* Workspace Switcher (Supabase-like) */}
         <div className="hidden md:flex items-center">
-          <select
-            className="text-sm rounded border bg-background px-2 py-1"
-            value={currentWorkspace?.id || ''}
-            onChange={async (e) => {
-              const next = workspaces.find((w) => w.id === e.target.value) || null;
-              setCurrentWorkspace(next);
-              if (next) {
-                await fetchProjects(next.id);
-              }
-            }}
-          >
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
+          <div className="relative group">
+            <button className="flex items-center gap-2 rounded border px-2 py-1 text-sm hover:bg-accent">
+              <span className="font-medium">{currentWorkspace?.name || 'Select workspace'}</span>
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <div className="invisible absolute left-0 top-full z-50 mt-1 w-64 rounded border bg-popover p-1 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+              <div className="max-h-64 overflow-auto">
+                {workspaces.map((w) => (
+                  <button
+                    key={w.id}
+                    className="flex w-full items-center justify-between rounded px-2 py-1 hover:bg-accent"
+                    onClick={async () => {
+                      setCurrentWorkspace(w);
+                      localStorage.setItem("siq:lastWorkspaceId", w.id);
+                      await fetchProjects(w.id);
+                      // navigate to projects list for selected workspace
+                      router.push('/projects?workspaceId=' + w.id);
+                    }}
+                  >
+                    <span>{w.name}</span>
+                    {currentWorkspace?.id === w.id && <span className="text-xs text-muted-foreground">current</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 border-t pt-1">
+                <button
+                  className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                  onClick={() => router.push('/workspaces/new')}
+                >
+                  + Create workspace
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Project Pills */}
-        <div className="ml-2 hidden md:flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {isReady && projectPills.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                setCurrentProject(projects.find((x) => x.id === p.id) || null);
-                router.push(`/projects/${p.id}`);
-              }}
-              className="rounded-full border px-2 py-1 text-xs hover:bg-accent"
-              title={p.name}
-            >
-              {p.short}
+        {/* Project Dropdown (Supabase-like) */}
+        <div className="ml-2 hidden md:flex items-center">
+          <div className="relative group">
+            <button className="flex items-center gap-2 rounded border px-2 py-1 text-sm hover:bg-accent">
+              <span className="font-medium">Projects</span>
+              <ChevronDown className="h-4 w-4" />
             </button>
-          ))}
+            <div className="invisible absolute left-0 top-full z-50 mt-1 w-72 rounded border bg-popover p-1 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+              <div className="max-h-64 overflow-auto">
+                {projectPills.map((p) => (
+                  <button
+                    key={p.id}
+                    className="flex w-full items-center justify-between rounded px-2 py-1 hover:bg-accent"
+                    onClick={() => {
+                      setCurrentProject(projects.find((x) => x.id === p.id) || null);
+                      router.push(`/projects/${p.id}`);
+                    }}
+                  >
+                    <span className="truncate" title={p.name}>{p.name}</span>
+                    <span className="rounded bg-muted px-2 py-0.5 text-[10px]">{p.short}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 border-t pt-1">
+                <button
+                  className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                  onClick={() => router.push('/projects/new')}
+                >
+                  + Create project
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="ml-auto flex items-center space-x-4">

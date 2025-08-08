@@ -8,10 +8,22 @@ const DEFAULT_CAPABILITY_SETS = {
   OWNER: [
     'view', 'create', 'edit', 'delete', 'manage_members', 'manage_settings'
   ] as RoleCapability[],
-  MANAGER: ['view', 'create', 'edit', 'manage_members'] as RoleCapability[],
+  MANAGER: ['view', 'create', 'edit', 'delete', 'manage_members'] as RoleCapability[],
   MEMBER: ['view', 'create', 'edit'] as RoleCapability[],
   VIEWER: ['view'] as RoleCapability[],
 };
+
+function mergeWithRoleDefaults(role: string | null | undefined, capsJson: string | null | undefined): RoleCapability[] {
+  let parsed: RoleCapability[] = [];
+  try {
+    parsed = JSON.parse(capsJson || '[]') as RoleCapability[];
+  } catch {
+    parsed = [];
+  }
+  const upper = (role || '').toUpperCase() as keyof typeof DEFAULT_CAPABILITY_SETS;
+  const defaults = DEFAULT_CAPABILITY_SETS[upper] || [];
+  return Array.from(new Set([...(parsed || []), ...defaults])) as RoleCapability[];
+}
 
 export class PermissionManager {
   static async getUserCapabilities(
@@ -39,11 +51,7 @@ export class PermissionManager {
       if (membership.role === 'owner') {
         return DEFAULT_CAPABILITY_SETS.OWNER;
       }
-      try {
-        return JSON.parse(membership.capabilities || '[]') as RoleCapability[];
-      } catch {
-        return [];
-      }
+      return mergeWithRoleDefaults(membership.role, membership.capabilities);
     }
 
     // Project context: check project member, otherwise fall back to workspace membership
@@ -56,11 +64,7 @@ export class PermissionManager {
       if (pMem.role === 'owner') {
         return DEFAULT_CAPABILITY_SETS.OWNER;
       }
-      try {
-        return JSON.parse(pMem.capabilities || '[]') as RoleCapability[];
-      } catch {
-        return [];
-      }
+      return mergeWithRoleDefaults(pMem.role, pMem.capabilities);
     }
 
     // Fallback: resolve workspace from project, then evaluate workspace membership

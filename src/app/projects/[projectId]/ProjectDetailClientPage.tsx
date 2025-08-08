@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus } from 'lucide-react';
+import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUser } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,6 +16,8 @@ import { KanbanBoard } from '@/components/tasks/KanbanBoard';
 import { CreateTaskForm } from '@/components/tasks/CreateTaskForm';
 import { TaskFilters } from '@/components/tasks/TaskFilters';
 import { AIChatFloating } from '@/components/ai/AIChatFloating';
+import { Timeline } from './Timeline';
+import { SettingsPanel } from './SettingsPanel';
 
 interface ProjectDetailClientPageProps {
   project: Project;
@@ -27,11 +29,18 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { canEdit, canDelete, canCreate, canManageMembers, isLoading: isPermissionsLoading } = usePermissions('project', project.id);
+  const projectPerms = usePermissions('project', project.id);
+  const workspacePerms = usePermissions('workspace', project.workspaceId);
+  const canCreate = projectPerms.canCreate || workspacePerms.canCreate;
+  const canEdit = projectPerms.canEdit || workspacePerms.canEdit;
+  const canDelete = projectPerms.canDelete || workspacePerms.canDelete;
+  const canManageMembers = projectPerms.canManageMembers || workspacePerms.canManageMembers;
+  const isPermissionsLoading = projectPerms.isLoading || workspacePerms.isLoading;
 
   const [team, setTeam] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [inviteProfileId, setInviteProfileId] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'owner' | 'manager' | 'member' | 'viewer'>('member');
 
   useEffect(() => {
@@ -249,19 +258,15 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           <KanbanBoard projectId={project.id} />
         </TabsContent>
 
-        {/* Timeline Tab Content (placeholder) */}
+        {/* Timeline Tab Content */}
         <TabsContent value="timeline" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Project Timeline</CardTitle>
-              <CardDescription>
-                Track project milestones and important dates.
-              </CardDescription>
+              <CardDescription>Tasks and sprints with dates</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
-                Timeline functionality coming soon...
-              </p>
+              <Timeline projectId={project.id} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -288,7 +293,22 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                         <div className="font-medium">{m.firstName || ''} {m.lastName || ''}</div>
                         <div className="text-muted-foreground">{m.email}</div>
                       </div>
-                      <div className="rounded bg-accent px-2 py-1 text-xs capitalize">{m.role}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="rounded bg-accent px-2 py-1 text-xs capitalize">{m.role}</div>
+                        {canManageMembers && (
+                          <Button
+                            variant="outline"
+                            size="sm" asChild
+                          >
+                            <span
+                              onClick={async () => {
+                                await fetch(`/api/projects/${project.id}/members?profileId=${m.id}`, { method: 'DELETE' });
+                                setTeam((prev) => prev.filter((x) => x.id !== m.id));
+                              }}
+                            >Remove</span>
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -296,13 +316,20 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
               {canManageMembers && (
                 <div className="mt-4 space-y-2">
-                  <div className="text-sm font-medium">Add member by Profile ID</div>
+                  <div className="text-sm font-medium">Add member</div>
                   <div className="flex gap-2">
                     <input
                       className="w-72 rounded border bg-background px-2 py-1 text-sm"
                       placeholder="profile_123"
                       value={inviteProfileId}
                       onChange={(e) => setInviteProfileId(e.target.value)}
+                    />
+                    <span className="text-xs text-muted-foreground self-center">or</span>
+                    <input
+                      className="w-72 rounded border bg-background px-2 py-1 text-sm"
+                      placeholder="user@example.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
                     />
                     <select
                       className="rounded border bg-background px-2 py-1 text-sm"
@@ -317,11 +344,11 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                     <Button
                       size="sm"
                       onClick={async () => {
-                        if (!inviteProfileId) return;
+                        if (!inviteProfileId && !inviteEmail) return;
                         const res = await fetch(`/api/projects/${project.id}/members`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ profileId: inviteProfileId, role: inviteRole }),
+                          body: JSON.stringify({ profileId: inviteProfileId || undefined, email: inviteEmail || undefined, role: inviteRole }),
                         });
                         if (res.ok) {
                           setTeam((prev) => {
@@ -329,37 +356,31 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                             if (exists) {
                               return prev.map((m) => (m.id === inviteProfileId ? { ...m, role: inviteRole } : m));
                             }
-                            return [...prev, { id: inviteProfileId, firstName: null, lastName: null, email: null, role: inviteRole }];
+                            return [...prev, { id: inviteProfileId || 'pending', firstName: null, lastName: null, email: inviteEmail || null, role: inviteRole }];
                           });
                           setInviteProfileId('');
+                          setInviteEmail('');
                         }
                       }}
                     >
                       Add Member
                     </Button>
                   </div>
-                  <div className="text-xs text-muted-foreground">Note: For now, enter the exact `profiles.id`.</div>
+                  <div className="text-xs text-muted-foreground">Tip: Use profile ID or email.</div>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Settings Tab Content (placeholder) */}
+        {/* Settings Tab Content */}
         <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Settings</CardTitle>
-              <CardDescription>
-                Configure project preferences and settings.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Project settings coming soon...
-              </p>
-            </CardContent>
-          </Card>
+          <SettingsPanel
+            project={project}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onDeleted={() => router.push('/projects')}
+          />
         </TabsContent>
       </Tabs>
 

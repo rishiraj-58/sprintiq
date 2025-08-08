@@ -40,10 +40,10 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
     const user = await requireAuth();
     const { projectId } = params;
     const body = await req.json();
-    const { profileId, role } = body as { profileId: string; role: 'owner' | 'manager' | 'member' | 'viewer' };
+    const { profileId, email, role } = body as { profileId?: string; email?: string; role: 'owner' | 'manager' | 'member' | 'viewer' };
 
-    if (!profileId || !role) {
-      return NextResponse.json({ error: 'profileId and role required' }, { status: 400 });
+    if ((!profileId && !email) || !role) {
+      return NextResponse.json({ error: 'profileId or email and role required' }, { status: 400 });
     }
 
     const caps = await PermissionManager.getUserCapabilities(user.id, projectId, 'project');
@@ -51,11 +51,21 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Resolve profileId from email if needed
+    let resolvedProfileId = profileId;
+    if (!resolvedProfileId && email) {
+      const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
+      if (!p) {
+        return NextResponse.json({ error: 'No user found with that email' }, { status: 404 });
+      }
+      resolvedProfileId = p.id;
+    }
+
     // Upsert membership
     const [existing] = await db
       .select({ id: projectMembers.id })
       .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.profileId, profileId)));
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.profileId, resolvedProfileId!)));
 
     const capabilities =
       role === 'owner'
@@ -76,12 +86,36 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
     } else {
       const [created] = await db
         .insert(projectMembers)
-        .values({ projectId, profileId, role, capabilities })
+        .values({ projectId, profileId: resolvedProfileId!, role, capabilities })
         .returning();
       return NextResponse.json({ member: created });
     }
   } catch (e) {
     console.error('POST project members error', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { projectId: string } }) {
+  try {
+    const user = await requireAuth();
+    const { projectId } = params;
+    const { searchParams } = new URL(req.url);
+    const profileId = searchParams.get('profileId');
+
+    if (!profileId) {
+      return NextResponse.json({ error: 'profileId is required' }, { status: 400 });
+    }
+
+    const caps = await PermissionManager.getUserCapabilities(user.id, projectId, 'project');
+    if (!caps.includes('manage_members')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    await db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.profileId, profileId)));
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error('DELETE project member error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

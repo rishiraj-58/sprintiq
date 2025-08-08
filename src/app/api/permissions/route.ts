@@ -7,12 +7,13 @@ export async function GET(req: Request) {
     const profile = await requireAuth();
     const { searchParams } = new URL(req.url);
     const contextId = searchParams.get('contextId');
+    const contextType = (searchParams.get('contextType') as 'workspace' | 'project') || 'workspace';
 
     if (!contextId) {
       return new NextResponse('Context ID is required', { status: 400 });
     }
 
-    const capabilities = await PermissionManager.getUserCapabilities(profile.id, contextId);
+    const capabilities = await PermissionManager.getUserCapabilities(profile.id, contextId, contextType);
     return NextResponse.json({ capabilities });
 
   } catch (error) {

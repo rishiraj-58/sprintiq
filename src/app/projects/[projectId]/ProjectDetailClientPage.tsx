@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Project } from '@/db/schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +27,28 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { canEdit, canDelete, canCreate, isLoading: isPermissionsLoading } = usePermissions('workspace', project.workspaceId);
+  const { canEdit, canDelete, canCreate, canManageMembers, isLoading: isPermissionsLoading } = usePermissions('project', project.id);
+
+  const [team, setTeam] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [inviteProfileId, setInviteProfileId] = useState('');
+  const [inviteRole, setInviteRole] = useState<'owner' | 'manager' | 'member' | 'viewer'>('member');
+
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        setTeamLoading(true);
+        const res = await fetch(`/api/projects/${project.id}/members`);
+        if (res.ok) {
+          const data = await res.json();
+          setTeam(data.members || []);
+        }
+      } finally {
+        setTeamLoading(false);
+      }
+    };
+    loadMembers();
+  }, [project.id]);
 
   // Debug logging
   console.log('ProjectDetailClientPage Debug:', {
@@ -41,8 +62,8 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   });
 
   console.log('ProjectDetailClientPage: Calling usePermissions with:', {
-    contextType: 'workspace',
-    contextId: project.workspaceId,
+    contextType: 'project',
+    contextId: project.id,
     clerkUserId: user?.id,
     clerkUserLoaded: !!user
   });
@@ -131,7 +152,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           </TabsList>
 
           {/* Create Task Button - Only show in Tasks tab */}
-          {activeTab === 'tasks' && (
+          {activeTab === 'tasks' && canCreate && (
             <div className="flex items-center gap-2">
               <CreateTaskForm projectId={project.id}>
                 <Button>
@@ -139,9 +160,6 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                   Create Task
                 </Button>
               </CreateTaskForm>
-              <div className="text-sm text-muted-foreground">
-                Debug: canCreate={canCreate.toString()}, loading={isPermissionsLoading.toString()}
-              </div>
             </div>
           )}
         </div>
@@ -248,7 +266,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           </Card>
         </TabsContent>
 
-        {/* Team Tab Content (placeholder) */}
+        {/* Team Tab Content */}
         <TabsContent value="team" className="space-y-4">
           <Card>
             <CardHeader>
@@ -258,9 +276,71 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
-                Team management functionality coming soon...
-              </p>
+              {teamLoading ? (
+                <div className="text-sm text-muted-foreground">Loading members…</div>
+              ) : team.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No members yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {team.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                      <div>
+                        <div className="font-medium">{m.firstName || ''} {m.lastName || ''}</div>
+                        <div className="text-muted-foreground">{m.email}</div>
+                      </div>
+                      <div className="rounded bg-accent px-2 py-1 text-xs capitalize">{m.role}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {canManageMembers && (
+                <div className="mt-4 space-y-2">
+                  <div className="text-sm font-medium">Add member by Profile ID</div>
+                  <div className="flex gap-2">
+                    <input
+                      className="w-72 rounded border bg-background px-2 py-1 text-sm"
+                      placeholder="profile_123"
+                      value={inviteProfileId}
+                      onChange={(e) => setInviteProfileId(e.target.value)}
+                    />
+                    <select
+                      className="rounded border bg-background px-2 py-1 text-sm"
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as any)}
+                    >
+                      <option value="owner">owner</option>
+                      <option value="manager">manager</option>
+                      <option value="member">member</option>
+                      <option value="viewer">viewer</option>
+                    </select>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!inviteProfileId) return;
+                        const res = await fetch(`/api/projects/${project.id}/members`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ profileId: inviteProfileId, role: inviteRole }),
+                        });
+                        if (res.ok) {
+                          setTeam((prev) => {
+                            const exists = prev.some((m) => m.id === inviteProfileId);
+                            if (exists) {
+                              return prev.map((m) => (m.id === inviteProfileId ? { ...m, role: inviteRole } : m));
+                            }
+                            return [...prev, { id: inviteProfileId, firstName: null, lastName: null, email: null, role: inviteRole }];
+                          });
+                          setInviteProfileId('');
+                        }
+                      }}
+                    >
+                      Add Member
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Note: For now, enter the exact `profiles.id`.</div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -45,46 +45,8 @@ export async function POST(req: NextRequest) {
 
     const aiText = await generateAIResponse({ messages });
 
-    // Optional: When AI outputs JSON with type task/bug, create it
-    // Expect a code-fenced JSON block; attempt to extract
-    const jsonMatch = aiText.match(/```json\s*([\s\S]*?)\s*```/);
-    let created: any = null;
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[1]);
-        if (parsed?.type === 'task' && projectId) {
-          const [t] = await db
-            .insert(tasks)
-            .values({
-              title: parsed.title?.slice(0, 200) || 'AI Task',
-              description: parsed.details ?? null,
-              status: parsed.status ?? 'todo',
-              priority: parsed.priority ?? 'medium',
-              projectId,
-              assigneeId: parsed.assigneeId ?? null,
-              creatorId: user.id,
-            })
-            .returning();
-          created = { kind: 'task', item: t };
-        } else if (parsed?.type === 'bug' && projectId) {
-          const [b] = await db
-            .insert(bugs)
-            .values({
-              title: parsed.title?.slice(0, 200) || 'AI Bug',
-              description: parsed.details ?? null,
-              status: parsed.status ?? 'open',
-              severity: parsed.severity ?? 'medium',
-              projectId,
-              reporterId: user.id,
-              assigneeId: parsed.assigneeId ?? null,
-            })
-            .returning();
-          created = { kind: 'bug', item: b };
-        }
-      } catch {}
-    }
-
-    return Response.json({ response: aiText, created });
+    // We now avoid auto-creating entities here. Clients should call AI tool endpoints to create items with permission checks.
+    return Response.json({ response: aiText, created: null });
   } catch (error: any) {
     console.error('AI chat error:', error);
     return new Response('Internal Server Error', { status: 500 });

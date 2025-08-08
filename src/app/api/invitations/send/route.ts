@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm';
 
 interface Invite {
   email: string;
-  role: 'manager' | 'member';
+  role: 'manager' | 'member' | 'viewer';
 }
 
 export async function POST(req: Request) {

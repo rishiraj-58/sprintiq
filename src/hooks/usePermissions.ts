@@ -25,7 +25,7 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
         setIsLoading(true);
         try {
           // Fetch from the API instead of calling PermissionManager directly
-          const response = await fetch(`/api/permissions?contextId=${contextId}`);
+          const response = await fetch(`/api/permissions?contextId=${contextId}&contextType=${contextType}`);
           console.log('usePermissions: API response status:', response.status);
           if (response.ok) {
             const data = await response.json();
@@ -52,7 +52,7 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
       console.log('usePermissions: Calling fetchCapabilities');
       fetchCapabilities();
     }
-  }, [user?.id, contextId]);
+  }, [user?.id, contextId, contextType]);
 
   return {
     isLoading,

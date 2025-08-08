@@ -94,8 +94,8 @@ export async function PATCH(
       return new NextResponse('Forbidden: You are not a member of this workspace', { status: 403 });
     }
 
-    // Check if user has edit permission
-    const userCapabilities = await PermissionManager.getUserCapabilities(profile.id, project.workspaceId);
+    // Check if user has edit permission in project context
+    const userCapabilities = await PermissionManager.getUserCapabilities(profile.id, projectId, 'project');
     if (!userCapabilities.includes('edit')) {
       return new NextResponse('Forbidden: You do not have permission to edit this project', { status: 403 });
     }
@@ -162,8 +162,8 @@ export async function DELETE(
       return new NextResponse('Forbidden: You are not a member of this workspace', { status: 403 });
     }
 
-    // Check if user has delete permission
-    const userCapabilities = await PermissionManager.getUserCapabilities(profile.id, project.workspaceId);
+    // Check if user has delete permission in project context
+    const userCapabilities = await PermissionManager.getUserCapabilities(profile.id, projectId, 'project');
     if (!userCapabilities.includes('delete')) {
       return new NextResponse('Forbidden: You do not have permission to delete this project', { status: 403 });
     }

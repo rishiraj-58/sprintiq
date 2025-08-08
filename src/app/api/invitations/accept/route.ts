@@ -189,9 +189,12 @@ export async function POST(request: Request) {
             workspaceId: invitation.workspaceId,
             profileId: profileId,
             role: invitation.role,
-            capabilities: invitation.role === 'manager' 
-              ? '["view", "create", "edit", "delete", "manage_members"]'
-              : '["view", "create", "edit"]',
+            capabilities:
+              invitation.role === 'manager'
+                ? '["view", "create", "edit", "delete", "manage_members"]'
+                : invitation.role === 'viewer'
+                ? '["view"]'
+                : '["view", "create", "edit"]',
           });
 
         // Update invitation status to accepted

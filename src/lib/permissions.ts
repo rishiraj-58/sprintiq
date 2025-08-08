@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { workspaceMembers } from '@/db/schema';
+import { workspaceMembers, projectMembers, projects } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { RoleCapability } from '@/types/database';
 
@@ -16,34 +16,61 @@ const DEFAULT_CAPABILITY_SETS = {
 export class PermissionManager {
   static async getUserCapabilities(
     userId: string,
-    contextId: string
+    contextId: string,
+    contextType: 'workspace' | 'project' = 'workspace'
   ): Promise<RoleCapability[]> {
-    const [membership] = await db
-      .select({
-        role: workspaceMembers.role,
-        capabilities: workspaceMembers.capabilities,
-      })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.profileId, userId),
-          eq(workspaceMembers.workspaceId, contextId)
-        )
-      );
+    if (contextType === 'workspace') {
+      const [membership] = await db
+        .select({
+          role: workspaceMembers.role,
+          capabilities: workspaceMembers.capabilities,
+        })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.profileId, userId),
+            eq(workspaceMembers.workspaceId, contextId)
+          )
+        );
 
-    if (!membership) {
-      return [];
+      if (!membership) {
+        return [];
+      }
+      if (membership.role === 'owner') {
+        return DEFAULT_CAPABILITY_SETS.OWNER;
+      }
+      try {
+        return JSON.parse(membership.capabilities || '[]') as RoleCapability[];
+      } catch {
+        return [];
+      }
     }
-    
-    if (membership.role === 'owner') {
-      return DEFAULT_CAPABILITY_SETS.OWNER;
+
+    // Project context: check project member, otherwise fall back to workspace membership
+    const [pMem] = await db
+      .select({ role: projectMembers.role, capabilities: projectMembers.capabilities, projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.profileId, userId), eq(projectMembers.projectId, contextId)));
+
+    if (pMem) {
+      if (pMem.role === 'owner') {
+        return DEFAULT_CAPABILITY_SETS.OWNER;
+      }
+      try {
+        return JSON.parse(pMem.capabilities || '[]') as RoleCapability[];
+      } catch {
+        return [];
+      }
     }
-    
-    // The capabilities are stored as a JSON string array, so we need to parse it.
-    try {
-      return JSON.parse(membership.capabilities || '[]') as RoleCapability[];
-    } catch {
-      return [];
-    }
+
+    // Fallback: resolve workspace from project, then evaluate workspace membership
+    const [proj] = await db
+      .select({ workspaceId: projects.workspaceId })
+      .from(projects)
+      .where(eq(projects.id, contextId));
+
+    if (!proj) return [];
+
+    return this.getUserCapabilities(userId, proj.workspaceId, 'workspace');
   }
 }

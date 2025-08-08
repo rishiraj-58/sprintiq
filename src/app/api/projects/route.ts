@@ -55,6 +55,22 @@ export async function POST(req: Request) {
       return new NextResponse('Name and Workspace ID are required', { status: 400 });
     }
     
+    // Require create capability at workspace level for creating projects
+    // (Owner/Manager/Member with create rights should be allowed)
+    const [membership] = await db
+      .select({ role: workspaceMembers.role, capabilities: workspaceMembers.capabilities })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.profileId, profile.id)));
+
+    if (!membership) {
+      return new NextResponse('Forbidden: not a member of this workspace', { status: 403 });
+    }
+
+    const caps = membership.role === 'owner' ? ['view','create','edit','delete','manage_members','manage_settings'] : JSON.parse(membership.capabilities || '[]');
+    if (!caps.includes('create')) {
+      return new NextResponse('Forbidden: insufficient permission to create project', { status: 403 });
+    }
+
     const newProject = await projectService.createProject({
       name,
       description,

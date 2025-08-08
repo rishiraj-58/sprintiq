@@ -88,6 +88,17 @@ export const tasks = pgTable('tasks', {
   completedAt: timestamp('completed_at')
 });
 
+// Project Members (project-level RBAC)
+export const projectMembers = pgTable('project_members', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  profileId: varchar('profile_id', { length: 255 }).notNull().references(() => profiles.id),
+  role: varchar('role', { length: 50 }).notNull().default('member'),
+  capabilities: text('capabilities').notNull().default('[]'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Sprints
 export const sprints = pgTable('sprints', {
   id: uuid('id').defaultRandom().primaryKey(),

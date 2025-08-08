@@ -27,6 +27,12 @@ export async function POST(req: Request) {
         return new NextResponse('Workspace name is required', { status: 400 });
       }
   
+      // Enforce permission to create workspaces (system-level)
+      // Allow if systemRole is admin or manager; owners implicitly have it via context, but here new context doesn't exist yet
+      if (!['admin', 'manager'].includes(profile.systemRole)) {
+        return new NextResponse('Forbidden: insufficient permission to create workspace', { status: 403 });
+      }
+
       // Create the new workspace
       const [newWorkspace] = await db
         .insert(workspaces)

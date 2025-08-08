@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { invitations, workspaces, profiles } from '@/db/schema';
+import { ensureCoreSchema } from '@/db/maintenance';
 import { eq, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
+    await ensureCoreSchema();
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
     

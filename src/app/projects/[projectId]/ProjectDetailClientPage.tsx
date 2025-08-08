@@ -38,6 +38,8 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const isPermissionsLoading = projectPerms.isLoading || workspacePerms.isLoading;
 
   const [team, setTeam] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
+  const [workspaceMembersList, setWorkspaceMembersList] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
+  const [memberSearch, setMemberSearch] = useState('');
   const [teamLoading, setTeamLoading] = useState(false);
   const [inviteProfileId, setInviteProfileId] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -51,6 +53,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
         if (res.ok) {
           const data = await res.json();
           setTeam(data.members || []);
+          setWorkspaceMembersList(data.workspaceMembers || []);
         }
       } finally {
         setTeamLoading(false);
@@ -281,6 +284,49 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {canManageMembers && (
+                <div className="mb-6 space-y-2">
+                  <div className="text-sm font-medium">Add existing workspace member to this project</div>
+                  <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                    {workspaceMembersList
+                      .filter((wm) => `${wm.firstName ?? ''} ${wm.lastName ?? ''} ${wm.email ?? ''}`.toLowerCase().includes(memberSearch.toLowerCase()))
+                      .filter((wm) => !team.some((tm) => tm.id === wm.id))
+                      .map((wm) => (
+                        <div key={wm.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                          <div>
+                            <div className="font-medium">{[wm.firstName, wm.lastName].filter(Boolean).join(' ') || wm.email || 'Member'}</div>
+                            <div className="text-muted-foreground">{wm.email}</div>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              await fetch(`/api/projects/${project.id}/members`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ profileId: wm.id, role: 'member' }),
+                              });
+                              setTeam((prev) => [...prev, { ...wm, role: 'member' }]);
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      ))}
+                    {workspaceMembersList.filter((wm) => !team.some((tm) => tm.id === wm.id)).length === 0 && (
+                      <div className="text-sm text-muted-foreground">All workspace members are already on this project.</div>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <input
+                      className="w-full rounded border bg-background px-2 py-1 text-sm"
+                      placeholder="Search workspace people by name or email"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               {teamLoading ? (
                 <div className="text-sm text-muted-foreground">Loading members…</div>
               ) : team.length === 0 ? (
@@ -296,17 +342,37 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                       <div className="flex items-center gap-2">
                         <div className="rounded bg-accent px-2 py-1 text-xs capitalize">{m.role}</div>
                         {canManageMembers && (
-                          <Button
-                            variant="outline"
-                            size="sm" asChild
-                          >
-                            <span
-                              onClick={async () => {
-                                await fetch(`/api/projects/${project.id}/members?profileId=${m.id}`, { method: 'DELETE' });
-                                setTeam((prev) => prev.filter((x) => x.id !== m.id));
+                          <>
+                            <select
+                              className="rounded border bg-background px-2 py-1 text-xs"
+                              value={m.role}
+                              onChange={async (e) => {
+                                const newRole = e.target.value;
+                                await fetch(`/api/projects/${project.id}/members`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ profileId: m.id, role: newRole }),
+                                });
+                                setTeam((prev) => prev.map((x) => (x.id === m.id ? { ...x, role: newRole } : x)));
                               }}
-                            >Remove</span>
-                          </Button>
+                            >
+                              <option value="owner">owner</option>
+                              <option value="manager">manager</option>
+                              <option value="member">member</option>
+                              <option value="viewer">viewer</option>
+                            </select>
+                            <Button
+                              variant="outline"
+                              size="sm" asChild
+                            >
+                              <span
+                                onClick={async () => {
+                                  await fetch(`/api/projects/${project.id}/members?profileId=${m.id}`, { method: 'DELETE' });
+                                  setTeam((prev) => prev.filter((x) => x.id !== m.id));
+                                }}
+                              >Remove</span>
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -316,7 +382,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
               {canManageMembers && (
                 <div className="mt-4 space-y-2">
-                  <div className="text-sm font-medium">Add member</div>
+                  <div className="text-sm font-medium">Invite to project</div>
                   <div className="flex gap-2">
                     <input
                       className="w-72 rounded border bg-background px-2 py-1 text-sm"
@@ -345,6 +411,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                       size="sm"
                       onClick={async () => {
                         if (!inviteProfileId && !inviteEmail) return;
+                        // If email provided and not existing, send a workspace+project invite
                         const res = await fetch(`/api/projects/${project.id}/members`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -360,10 +427,21 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                           });
                           setInviteProfileId('');
                           setInviteEmail('');
+                        } else if (inviteEmail) {
+                          // Fallback to sending a combined invite with projectId
+                          await fetch('/api/invitations/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              workspaceId: project.workspaceId,
+                              invites: [{ email: inviteEmail, role: 'member', projectId: project.id }],
+                            }),
+                          });
+                          setInviteEmail('');
                         }
                       }}
                     >
-                      Add Member
+                      Invite
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground">Tip: Use profile ID or email.</div>

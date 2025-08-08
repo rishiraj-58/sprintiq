@@ -13,8 +13,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         // fetchWorkspaces now returns the workspaces
         const workspaces = await fetchWorkspaces();
         if (workspaces && workspaces.length > 0) {
-          // Set the first workspace as the current one
-          setCurrentWorkspace(workspaces[0]);
+          const lastId = typeof window !== 'undefined' ? localStorage.getItem('siq:lastWorkspaceId') : null;
+          const pick = (lastId && workspaces.find((w) => w.id === lastId)) || workspaces[0];
+          setCurrentWorkspace(pick);
         }
       } catch (error) {
         console.error("Failed to initialize workspaces", error);

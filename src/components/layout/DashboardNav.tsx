@@ -6,16 +6,20 @@ import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 
-const navItems = [
-  { title: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
-  { title: 'Tasks', href: '/tasks', icon: 'CheckSquare' },
-  { title: 'Team', href: '/team', icon: 'Users' },
-];
+function useWorkspaceScopedNav(workspaceId?: string) {
+  const base = workspaceId ? `/dashboard/workspace/${workspaceId}` : '/dashboard';
+  return [
+    { title: 'Dashboard', href: `${base}`, icon: 'LayoutDashboard' },
+    { title: 'Tasks', href: `${base}/tasks`, icon: 'CheckSquare' },
+    { title: 'Team', href: `/workspaces/${workspaceId}/team`, icon: 'Users' },
+  ];
+}
 
 export function DashboardNav() {
   const pathname = usePathname();
   const { currentWorkspace } = useWorkspace();
   const { canManageMembers, canManageSettings } = usePermissions('workspace', currentWorkspace?.id);
+  const navItems = useWorkspaceScopedNav(currentWorkspace?.id);
 
   return (
     <nav className="grid items-start gap-2">

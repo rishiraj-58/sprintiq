@@ -27,6 +27,7 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
   const [intent, setIntent] = useState<'create' | 'join' | 'explore'>('create');
   const [workspaceName, setWorkspaceName] = useState('');
   const [invites, setInvites] = useState('');
+  const [joinToken, setJoinToken] = useState('');
 
   const handleNextStep = () => setStep(step + 1);
   const handlePrevStep = () => setStep(step - 1);
@@ -126,12 +127,35 @@ export function OnboardingForm({ profile }: OnboardingFormProps) {
               </div>
             </RadioGroup>
             {intent === 'join' && (
+              <div className="space-y-3 mt-3">
                 <Alert>
-                    <AlertTitle>Check your Email!</AlertTitle>
-                    <AlertDescription>
-                        To join an existing workspace, please use the invitation link sent to your email. If you don't have one, ask your workspace manager to invite you.
-                    </AlertDescription>
+                  <AlertTitle>Have an invitation code?</AlertTitle>
+                  <AlertDescription>
+                    Enter your invitation code to join a workspace. If you don't have one, ask your workspace manager to invite you.
+                  </AlertDescription>
                 </Alert>
+                <div className="flex gap-2">
+                  <Input placeholder="Paste invitation code (token)" value={joinToken} onChange={(e) => setJoinToken(e.target.value)} />
+                  <Button
+                    onClick={async () => {
+                      if (!joinToken) return;
+                      try {
+                        const res = await fetch('/api/onboarding/join', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ token: joinToken, firstName, lastName }),
+                        });
+                        if (res.ok) {
+                          // Mark done and go to dashboard
+                          router.push('/dashboard');
+                        }
+                      } catch (e) {}
+                    }}
+                  >
+                    Join
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
           <CardFooter className="justify-between">

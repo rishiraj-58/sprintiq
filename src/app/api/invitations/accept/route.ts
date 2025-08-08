@@ -40,13 +40,14 @@ export async function POST(request: Request) {
 
         // Find the invitation by token
         console.log('1. Looking up invitation by token...');
-        const [invitation] = await db
+         const [invitation] = await db
           .select({
             id: invitations.id,
             workspaceId: invitations.workspaceId,
             email: invitations.email,
             role: invitations.role,
             status: invitations.status,
+             projectId: invitations.projectId,
             invitedById: invitations.invitedById,
           })
           .from(invitations)
@@ -196,6 +197,21 @@ export async function POST(request: Request) {
                 ? '["view"]'
                 : '["view", "create", "edit"]',
           });
+
+        // If invite includes projectId, add minimal project membership
+        if (invitation.projectId) {
+          // Insert project member
+          const { projectMembers } = await import('@/db/schema');
+          await db
+            .insert(projectMembers)
+            .values({
+              projectId: invitation.projectId,
+              profileId: profileId,
+              role: 'member',
+              capabilities: '["view", "create", "edit"]',
+            })
+            .returning();
+        }
 
         // Update invitation status to accepted
         console.log('13. Updating invitation status...');

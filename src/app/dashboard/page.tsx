@@ -1,6 +1,6 @@
 import { getCurrentUserProfile } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { RoleBasedDashboardClient } from './RoleBasedDashboardClient';
+import { workspaceService } from '@/services/workspace';
 
 export default async function DashboardPage() {
   const profile = await getCurrentUserProfile();
@@ -9,5 +9,11 @@ export default async function DashboardPage() {
     redirect('/auth/sign-in');
   }
 
-  return <RoleBasedDashboardClient />;
+  // Redirect to the selected/first workspace dashboard (workspace-scoped by default)
+  const userWorkspaces = await workspaceService.fetchUserWorkspaces(profile.id);
+  if (!userWorkspaces || userWorkspaces.length === 0) {
+    redirect('/onboarding');
+  }
+  // Pick first; client provider will sync last-used later
+  redirect(`/dashboard/workspace/${userWorkspaces[0].id}`);
 }

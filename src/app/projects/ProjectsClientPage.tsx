@@ -22,6 +22,7 @@ export function ProjectsClientPage() {
 
   useEffect(() => {
     if (currentWorkspace?.id) {
+      localStorage.setItem('siq:lastWorkspaceId', currentWorkspace.id);
       fetchProjects(currentWorkspace.id);
     }
   }, [currentWorkspace?.id, fetchProjects]);

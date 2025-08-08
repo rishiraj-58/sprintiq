@@ -1,13 +1,18 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUserProfile } from '@/lib/auth';
 import { Spinner } from '@/components/ui/spinner';
+import { workspaceService } from '@/services/workspace';
 
 export default async function AuthCallbackPage() {
   const profile = await getCurrentUserProfile();
 
-  // If a profile exists and onboarding is complete, go to the dashboard.
+  // If a profile exists and onboarding is complete, go to their workspace dashboard
   if (profile?.onboardingCompleted) {
-    redirect('/dashboard');
+    const userWorkspaces = await workspaceService.fetchUserWorkspaces(profile.id);
+    if (userWorkspaces && userWorkspaces.length > 0) {
+      redirect(`/dashboard/workspace/${userWorkspaces[0].id}`);
+    }
+    redirect('/onboarding');
   }
   
   // If a profile exists but onboarding is not complete, go to onboarding.

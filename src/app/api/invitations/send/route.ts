@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { invitations, workspaces } from '@/db/schema';
+import { ensureCoreSchema } from '@/db/maintenance';
 import { sendInvitationEmail } from '@/lib/email';
 import { eq } from 'drizzle-orm';
 // import { Resend } from 'resend';
@@ -11,12 +12,14 @@ import { eq } from 'drizzle-orm';
 interface Invite {
   email: string;
   role: 'manager' | 'member' | 'viewer';
+  projectId?: string; // optional project-level invite
 }
 
 export async function POST(req: Request) {
   console.log('=== INVITATION API CALLED ===');
   
   try {
+    await ensureCoreSchema();
     console.log('1. Authenticating user...');
     const profile = await requireAuth();
     console.log('2. User authenticated:', profile.id);
@@ -43,6 +46,7 @@ export async function POST(req: Request) {
       email: invite.email,
       role: invite.role,
       invitedById: profile.id,
+      projectId: invite.projectId || null,
     }));
     console.log('9. Invitation records:', invitationRecords);
 

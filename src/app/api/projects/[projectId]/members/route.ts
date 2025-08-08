@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { projectMembers, profiles, projects } from '@/db/schema';
+import { projectMembers, profiles, projects, workspaceMembers } from '@/db/schema';
+import { ensureCoreSchema } from '@/db/maintenance';
 import { and, eq } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
 
 export async function GET(req: NextRequest, { params }: { params: { projectId: string } }) {
   try {
+    await ensureCoreSchema();
     const user = await requireAuth();
     const { projectId } = params;
 
@@ -28,7 +30,24 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
       .innerJoin(profiles, eq(projectMembers.profileId, profiles.id))
       .where(eq(projectMembers.projectId, projectId));
 
-    return NextResponse.json({ members });
+    // Also fetch workspace members for convenience in UI (to add to project)
+    const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId));
+    let workspaceMembersList: Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>= [];
+    if (proj) {
+      workspaceMembersList = await db
+        .select({
+          id: profiles.id,
+          firstName: profiles.firstName,
+          lastName: profiles.lastName,
+          email: profiles.email,
+          role: workspaceMembers.role,
+        })
+        .from(workspaceMembers)
+        .innerJoin(profiles, eq(workspaceMembers.profileId, profiles.id))
+        .where(eq(workspaceMembers.workspaceId, proj.workspaceId));
+    }
+
+    return NextResponse.json({ members, workspaceMembers: workspaceMembersList });
   } catch (e) {
     console.error('GET project members error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -37,6 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
 
 export async function POST(req: NextRequest, { params }: { params: { projectId: string } }) {
   try {
+    await ensureCoreSchema();
     const user = await requireAuth();
     const { projectId } = params;
     const body = await req.json();
@@ -56,7 +76,16 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
     if (!resolvedProfileId && email) {
       const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
       if (!p) {
-        return NextResponse.json({ error: 'No user found with that email' }, { status: 404 });
+        // Auto-create invitation that includes projectId when user not found
+        const { invitations } = await import('@/db/schema');
+        const inviterCaps = await PermissionManager.getUserCapabilities(user.id, projectId, 'project');
+        if (!inviterCaps.includes('manage_members')) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId));
+        if (!proj) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+        await db.insert(invitations).values({ workspaceId: proj.workspaceId, email, role: 'member', invitedById: user.id, projectId });
+        return NextResponse.json({ invited: true });
       }
       resolvedProfileId = p.id;
     }
@@ -98,6 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
 
 export async function DELETE(req: NextRequest, { params }: { params: { projectId: string } }) {
   try {
+    await ensureCoreSchema();
     const user = await requireAuth();
     const { projectId } = params;
     const { searchParams } = new URL(req.url);

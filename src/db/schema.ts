@@ -49,6 +49,7 @@ export const invitations = pgTable('invitations', {
   token: uuid('token').defaultRandom().notNull().unique(),
   status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending', 'accepted', 'expired'
   invitedById: varchar('invited_by_id', { length: 255 }).notNull().references(() => profiles.id),
+  projectId: uuid('project_id').references(() => projects.id),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

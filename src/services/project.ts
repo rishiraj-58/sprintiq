@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { projects, type Project } from '@/db/schema';
+import { projects, type Project, projectMembers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 interface ProjectCreate {
@@ -28,6 +28,20 @@ export const projectService = {
         status: 'active',
       })
       .returning();
+
+    // Ensure the creator is added as project owner by default
+    try {
+      await db
+        .insert(projectMembers)
+        .values({
+          projectId: project.id,
+          profileId: data.ownerId,
+          role: 'owner',
+          capabilities: '["view","create","edit","delete","manage_members","manage_settings"]',
+        });
+    } catch (e) {
+      // Ignore if table missing or constraint errors; self-healing will handle table creation
+    }
 
     return project;
   }

@@ -15,7 +15,7 @@ export function Hero() {
           to help you deliver projects faster and smarter.
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <Link href="/auth/sign-up">
+          <Link href="/get-started">
             <Button size="lg" className="w-full sm:w-auto">
               Get Started Free
             </Button>

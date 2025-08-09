@@ -9,9 +9,12 @@ import { useWorkspace } from '@/stores/hooks/useWorkspace';
 function useWorkspaceScopedNav(workspaceId?: string) {
   const base = workspaceId ? `/dashboard/workspace/${workspaceId}` : '/dashboard';
   return [
-    { title: 'Dashboard', href: `${base}`, icon: 'LayoutDashboard' },
-    { title: 'Tasks', href: `${base}/tasks`, icon: 'CheckSquare' },
+    { title: 'Projects', href: `${base}`, icon: 'LayoutDashboard' },
     { title: 'Team', href: `/workspaces/${workspaceId}/team`, icon: 'Users' },
+    { title: 'Integrations', href: `${base}/integrations`, icon: 'Puzzle' },
+    { title: 'Usage', href: `${base}/usage`, icon: 'BarChart' },
+    { title: 'Billing', href: `${base}/billing`, icon: 'CreditCard' },
+    { title: 'Organization Settings', href: `/workspaces/${workspaceId}/settings`, icon: 'Settings' },
   ];
 }
 
@@ -35,28 +38,7 @@ export function DashboardNav() {
           <span>{item.title}</span>
         </Link>
       ))}
-      {canManageMembers && (
-        <Link
-          href="/dashboard/manager/sprint-planner"
-          className={cn(
-            "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-            pathname === '/dashboard/manager/sprint-planner' ? 'bg-accent' : 'transparent'
-          )}
-        >
-          <span>Manager: Sprint Planner</span>
-        </Link>
-      )}
-      {canManageSettings && (
-        <Link
-          href="/dashboard/reports"
-          className={cn(
-            "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-            pathname === '/dashboard/reports' ? 'bg-accent' : 'transparent'
-          )}
-        >
-          <span>Reports</span>
-        </Link>
-      )}
+      {/* Placeholder links for future sections; main ones active are Projects, Team, Settings */}
     </nav>
   );
 } 

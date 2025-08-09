@@ -300,12 +300,14 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                           <Button
                             size="sm"
                             onClick={async () => {
-                              await fetch(`/api/projects/${project.id}/members`, {
+                              const res = await fetch(`/api/projects/${project.id}/members`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ profileId: wm.id, role: 'member' }),
                               });
-                              setTeam((prev) => [...prev, { ...wm, role: 'member' }]);
+                              if (res.ok) {
+                                setTeam((prev) => [...prev, { ...wm, role: 'member' }]);
+                              }
                             }}
                           >
                             Add
@@ -423,7 +425,10 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
                             if (exists) {
                               return prev.map((m) => (m.id === inviteProfileId ? { ...m, role: inviteRole } : m));
                             }
-                            return [...prev, { id: inviteProfileId || 'pending', firstName: null, lastName: null, email: inviteEmail || null, role: inviteRole }];
+                            // Only add immediately if profileId path; for email invites, wait until accepted
+                            return inviteProfileId
+                              ? [...prev, { id: inviteProfileId, firstName: null, lastName: null, email: inviteEmail || null, role: inviteRole }]
+                              : prev;
                           });
                           setInviteProfileId('');
                           setInviteEmail('');

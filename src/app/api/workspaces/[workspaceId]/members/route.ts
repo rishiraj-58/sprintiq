@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { workspaceMembers, profiles } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export async function GET(
   req: Request,
@@ -49,5 +49,35 @@ export async function GET(
       { error: 'Failed to fetch workspace members' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { workspaceId: string } }
+) {
+  try {
+    const profile = await requireAuth();
+    const { workspaceId } = params;
+    const { searchParams } = new URL(req.url);
+    const profileId = searchParams.get('profileId');
+    if (!profileId) return new NextResponse('profileId required', { status: 400 });
+
+    // ensure requester is manager/owner of workspace
+    const [mem] = await db
+      .select({ id: workspaceMembers.id, role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.profileId, profile.id), eq(workspaceMembers.workspaceId, workspaceId)));
+    if (!mem || (mem.role !== 'owner' && mem.role !== 'manager')) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    await db
+      .delete(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.profileId, profileId)));
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error('Error removing workspace member:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

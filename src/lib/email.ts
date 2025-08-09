@@ -5,6 +5,7 @@ type InvitationEmailProps = {
   workspaceName: string;
   inviterName: string;
   invitationLink: string;
+  token?: string;
 };
 
 type EmailResult = {
@@ -33,6 +34,7 @@ export async function sendInvitationEmail({
   workspaceName,
   inviterName,
   invitationLink,
+  token,
 }: InvitationEmailProps): Promise<EmailResult> {
   console.log('=== SEND INVITATION EMAIL STARTED ===');
   console.log('Email params:', { email, workspaceName, inviterName, invitationLink });
@@ -116,6 +118,7 @@ export async function sendInvitationEmail({
               Accept Invitation
             </a>
           </div>
+          ${token ? `<p style="color:#555; font-size: 14px;">Invitation code: <strong>${token}</strong></p>` : ''}
           <p>This invitation will expire in 7 days.</p>
           <hr style="border-top: 1px solid #eaeaea; margin: 20px 0;" />
           <p style="color: #666; font-size: 14px;">The SprintIQ Team</p>

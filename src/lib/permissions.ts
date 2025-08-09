@@ -54,7 +54,7 @@ export class PermissionManager {
       return mergeWithRoleDefaults(membership.role, membership.capabilities);
     }
 
-    // Project context: check project member, otherwise fall back to workspace membership
+    // Project context: check project membership only (no workspace fallback)
     const [pMem] = await db
       .select({ role: projectMembers.role, capabilities: projectMembers.capabilities, projectId: projectMembers.projectId })
       .from(projectMembers)
@@ -67,14 +67,7 @@ export class PermissionManager {
       return mergeWithRoleDefaults(pMem.role, pMem.capabilities);
     }
 
-    // Fallback: resolve workspace from project, then evaluate workspace membership
-    const [proj] = await db
-      .select({ workspaceId: projects.workspaceId })
-      .from(projects)
-      .where(eq(projects.id, contextId));
-
-    if (!proj) return [];
-
-    return this.getUserCapabilities(userId, proj.workspaceId, 'workspace');
+    // No project membership found → no capabilities in this project
+    return [];
   }
 }

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { projectMembers, profiles, projects, workspaceMembers } from '@/db/schema';
+import { projectMembers, profiles, projects, workspaceMembers, invitations, workspaces } from '@/db/schema';
 import { ensureCoreSchema } from '@/db/maintenance';
 import { and, eq } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
+import { sendInvitationEmail } from '@/lib/email';
 
 export async function GET(req: NextRequest, { params }: { params: { projectId: string } }) {
   try {
@@ -76,15 +77,31 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
     if (!resolvedProfileId && email) {
       const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, email));
       if (!p) {
-        // Auto-create invitation that includes projectId when user not found
-        const { invitations } = await import('@/db/schema');
+        // Invite and email; do NOT add to project yet
         const inviterCaps = await PermissionManager.getUserCapabilities(user.id, projectId, 'project');
         if (!inviterCaps.includes('manage_members')) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId));
         if (!proj) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-        await db.insert(invitations).values({ workspaceId: proj.workspaceId, email, role: 'member', invitedById: user.id, projectId });
+        const [invRow] = await db
+          .insert(invitations)
+          .values({ workspaceId: proj.workspaceId, email, role: 'member', invitedById: user.id, projectId })
+          .returning();
+        try {
+          const [ws] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, proj.workspaceId));
+          const [inviter] = await db.select({ firstName: profiles.firstName, lastName: profiles.lastName }).from(profiles).where(eq(profiles.id, user.id));
+          const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL}/join?token=${invRow.token}`;
+          await sendInvitationEmail({
+            email,
+            workspaceName: ws?.name || 'a workspace',
+            inviterName: inviter ? `${inviter.firstName || ''} ${inviter.lastName || ''}`.trim() || 'A team member' : 'A team member',
+            invitationLink: inviteLink,
+            token: invRow.token,
+          });
+        } catch (e) {
+          console.error('Failed to send project invite email', e);
+        }
         return NextResponse.json({ invited: true });
       }
       resolvedProfileId = p.id;

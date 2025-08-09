@@ -93,6 +93,7 @@ export async function POST(req: Request) {
               workspaceName: workspace.name,
               inviterName: profile.firstName || 'A team member',
               invitationLink: inviteLink,
+              token: invite.token,
             });
             
             console.log(`17. Email sent successfully to ${invite.email}:`, result.messageId);

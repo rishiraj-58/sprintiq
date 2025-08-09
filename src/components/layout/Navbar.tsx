@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/stores/hooks/useWorkspace";
 import { useProject } from "@/stores/hooks/useProject";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronsUpDown, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export function Navbar() {
   const router = useRouter();
@@ -49,23 +50,40 @@ export function Navbar() {
     }));
   }, [projects]);
 
+  const [wsQuery, setWsQuery] = useState("");
+  const filteredWorkspaces = useMemo(() => {
+    const list = wsQuery
+      ? workspaces.filter((w) => w.name.toLowerCase().includes(wsQuery.toLowerCase()))
+      : workspaces.slice(0, 3);
+    return list;
+  }, [workspaces, wsQuery]);
+
   return (
     <nav className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center gap-4 px-4">
-        <Link href="/" className="font-semibold">
-          <span className="inline-block rounded bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">SprintIQ</span>
-        </Link>
-
-        {/* Workspace Switcher (Supabase-like) */}
-        <div className="hidden md:flex items-center">
+        {/* Brand + Workspace switcher: "SprintIQ / Workspace" */}
+        <div className="hidden md:flex items-center gap-2">
+          <Link href="/" className="font-semibold">
+            <span className="inline-block">SprintIQ</span>
+          </Link>
+          <span className="text-muted-foreground">/</span>
           <div className="relative group">
-            <button className="flex items-center gap-2 rounded border px-2 py-1 text-sm hover:bg-accent">
+            <button className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
               <span className="font-medium">{currentWorkspace?.name || 'Select workspace'}</span>
-              <ChevronDown className="h-4 w-4" />
+              <ChevronsUpDown className="h-4 w-4" />
             </button>
-            <div className="invisible absolute left-0 top-full z-50 mt-1 w-64 rounded border bg-popover p-1 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
-              <div className="max-h-64 overflow-auto">
-                {workspaces.map((w) => (
+            <div className="invisible absolute left-0 top-full z-50 mt-1 w-80 rounded border bg-popover p-2 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+              <div className="flex items-center gap-2 rounded border bg-background px-2 py-1">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search workspaces"
+                  value={wsQuery}
+                  onChange={(e) => setWsQuery(e.target.value)}
+                  className="h-7 border-0 focus-visible:ring-0"
+                />
+              </div>
+              <div className="mt-2 max-h-64 overflow-auto">
+                {filteredWorkspaces.map((w) => (
                   <button
                     key={w.id}
                     className="flex w-full items-center justify-between rounded px-2 py-1 hover:bg-accent"
@@ -73,16 +91,18 @@ export function Navbar() {
                       setCurrentWorkspace(w);
                       localStorage.setItem("siq:lastWorkspaceId", w.id);
                       await fetchProjects(w.id);
-                      // navigate to projects list for selected workspace
-                      router.push('/projects?workspaceId=' + w.id);
+                      router.push(`/dashboard/workspace/${w.id}`);
                     }}
                   >
-                    <span>{w.name}</span>
+                    <span className="truncate" title={w.name}>{w.name}</span>
                     {currentWorkspace?.id === w.id && <span className="text-xs text-muted-foreground">current</span>}
                   </button>
                 ))}
+                {filteredWorkspaces.length === 0 && (
+                  <div className="px-2 py-1 text-xs text-muted-foreground">No workspaces found</div>
+                )}
               </div>
-              <div className="mt-1 border-t pt-1">
+              <div className="mt-2 border-t pt-2">
                 <button
                   className="w-full rounded px-2 py-1 text-left hover:bg-accent"
                   onClick={() => router.push('/workspaces/new')}
@@ -99,7 +119,7 @@ export function Navbar() {
           <div className="relative group">
             <button className="flex items-center gap-2 rounded border px-2 py-1 text-sm hover:bg-accent">
               <span className="font-medium">Projects</span>
-              <ChevronDown className="h-4 w-4" />
+              <ChevronsUpDown className="h-4 w-4" />
             </button>
             <div className="invisible absolute left-0 top-full z-50 mt-1 w-72 rounded border bg-popover p-1 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
               <div className="max-h-64 overflow-auto">

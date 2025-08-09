@@ -18,6 +18,7 @@ import { TaskFilters } from '@/components/tasks/TaskFilters';
 import { AIChatFloating } from '@/components/ai/AIChatFloating';
 import { Timeline } from './Timeline';
 import { SettingsPanel } from './SettingsPanel';
+import { useProject } from '@/stores/hooks/useProject';
 
 interface ProjectDetailClientPageProps {
   project: Project;
@@ -28,6 +29,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const { toast } = useToast();
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState('overview');
+  const { setCurrentProject } = useProject();
 
   const projectPerms = usePermissions('project', project.id);
   const workspacePerms = usePermissions('workspace', project.workspaceId);
@@ -46,6 +48,11 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const [inviteRole, setInviteRole] = useState<'owner' | 'manager' | 'member' | 'viewer'>('member');
 
   useEffect(() => {
+    // ensure navbar shows current project
+    setCurrentProject(project as any);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('siq:lastProjectId', project.id);
+    }
     const loadMembers = async () => {
       try {
         setTeamLoading(true);
@@ -111,6 +118,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
   return (
     <div className="space-y-6">
+      {/* Navbar is provided by projects layout */}
       {/* Project Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
@@ -137,37 +145,31 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
       <Separator />
 
-      {/* Project Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList className="grid w-full max-w-md grid-cols-5">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="tasks" className="flex items-center gap-2">
-              <CheckSquare className="h-4 w-4" />
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger value="timeline" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Timeline
-            </TabsTrigger>
-            <TabsTrigger value="team" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Team
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Create Task Button - Only show in Tasks tab */}
-          {activeTab === 'tasks' && canCreate && (
-            <div className="flex items-center gap-2">
+      {/* Project Sidebar + Content */}
+      <div className="flex gap-6">
+        <aside className="w-56 shrink-0">
+          <div className="sticky top-20">
+            <div className="grid gap-1">
+              <button onClick={() => setActiveTab('overview')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='overview'?'bg-accent':''}`}>
+                <div className="flex items-center gap-2"><FileText className="h-4 w-4" /> Overview</div>
+              </button>
+              <button onClick={() => setActiveTab('tasks')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='tasks'?'bg-accent':''}`}>
+                <div className="flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Tasks</div>
+              </button>
+              <button onClick={() => setActiveTab('timeline')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='timeline'?'bg-accent':''}`}>
+                <div className="flex items-center gap-2"><Clock className="h-4 w-4" /> Timeline</div>
+              </button>
+              <button onClick={() => setActiveTab('team')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='team'?'bg-accent':''}`}>
+                <div className="flex items-center gap-2"><User className="h-4 w-4" /> Team</div>
+              </button>
+              <button onClick={() => setActiveTab('settings')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='settings'?'bg-accent':''}`}>
+                <div className="flex items-center gap-2"><Settings className="h-4 w-4" /> Settings</div>
+              </button>
+            </div>
+            {activeTab === 'tasks' && canCreate && (
+              <div className="mt-4">
               <CreateTaskForm projectId={project.id}>
-                <Button>
+                  <Button className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Task
                 </Button>
@@ -175,6 +177,11 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
             </div>
           )}
         </div>
+        </aside>
+
+        <div className="flex-1">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            
 
         {/* Overview Tab Content */}
         <TabsContent value="overview" className="space-y-4">
@@ -239,6 +246,58 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
               </CardContent>
             </Card>
           </div>
+
+          {/* Static Charts Row */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Velocity (last 6 sprints)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48 rounded border bg-gradient-to-b from-primary/10 to-transparent flex items-end gap-2 p-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex-1 bg-primary/40" style={{ height: `${30 + i * 10}%` }} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Issue Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative mx-auto h-48 w-48">
+                  <div className="absolute inset-0 rounded-full border-[14px] border-primary/50" />
+                  <div className="absolute inset-0 rounded-full border-[14px] border-t-transparent border-l-transparent" />
+                  <div className="absolute inset-0 rounded-full border-[14px] border-secondary/60 rotate-45" />
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <div>Features: 40%</div>
+                  <div>Bugs: 35%</div>
+                  <div>Chores: 25%</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Trend line */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tasks Completed Over Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-40 overflow-hidden rounded border">
+                <svg viewBox="0 0 400 120" className="w-full h-full">
+                  <polyline
+                    fill="none"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth="3"
+                    points="0,90 50,80 100,70 150,60 200,65 250,55 300,40 350,35 400,30"
+                  />
+                </svg>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -466,6 +525,8 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
           />
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
 
       {/* Floating AI Assistant */}
       <AIChatFloating projectId={project.id} />

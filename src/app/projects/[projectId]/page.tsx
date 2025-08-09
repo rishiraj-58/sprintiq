@@ -4,6 +4,8 @@ import { db } from '@/db';
 import { projects, workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { ProjectDetailClientPage } from './ProjectDetailClientPage';
+import { workspaces } from '@/db/schema';
+import { Navbar } from '@/components/layout/Navbar';
 
 interface ProjectDetailPageProps {
   params: {

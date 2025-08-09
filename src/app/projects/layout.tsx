@@ -1,7 +1,7 @@
 import { getCurrentUserProfile } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { DashboardProvider } from '@/app/dashboard/DashboardProvider';
-import { DashboardNav } from '@/components/layout/DashboardNav';
+import { Navbar } from '@/components/layout/Navbar';
 
 export default async function ProjectsLayout({
   children,
@@ -20,15 +20,10 @@ export default async function ProjectsLayout({
 
   return (
     <DashboardProvider>
-      <div className="min-h-screen flex">
-        {/* Sidebar Navigation */}
-        <DashboardNav />
-        
-        {/* Main Content */}
-        <main className="flex-1 lg:ml-64">
-          <div className="p-6">
-            {children}
-          </div>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="p-6">
+          {children}
         </main>
       </div>
     </DashboardProvider>

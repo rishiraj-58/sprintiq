@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 export function Navbar() {
   const router = useRouter();
   const { workspaces, currentWorkspace, fetchWorkspaces, setCurrentWorkspace } = useWorkspace();
-  const { projects, fetchProjects, setCurrentProject } = useProject();
+  const { projects, currentProject, fetchProjects, setCurrentProject } = useProject();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -51,12 +51,20 @@ export function Navbar() {
   }, [projects]);
 
   const [wsQuery, setWsQuery] = useState("");
+  const [projQuery, setProjQuery] = useState("");
   const filteredWorkspaces = useMemo(() => {
     const list = wsQuery
       ? workspaces.filter((w) => w.name.toLowerCase().includes(wsQuery.toLowerCase()))
       : workspaces.slice(0, 3);
     return list;
   }, [workspaces, wsQuery]);
+
+  const filteredProjects = useMemo(() => {
+    const list = projQuery
+      ? projects.filter((p) => p.name.toLowerCase().includes(projQuery.toLowerCase()))
+      : projects.slice(0, 8);
+    return list.map((p) => ({ id: p.id, name: p.name }));
+  }, [projects, projQuery]);
 
   return (
     <nav className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -112,42 +120,62 @@ export function Navbar() {
               </div>
             </div>
           </div>
+
+          {/* Project Switcher inline */}
+          {currentWorkspace && (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <div className="relative group">
+                <button className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
+                  <span className="font-medium">{(typeof window !== 'undefined' && (projects.find(p => p.id === localStorage.getItem('siq:lastProjectId'))?.name)) || currentProject?.name || 'Select project'}</span>
+                  <ChevronsUpDown className="h-4 w-4" />
+                </button>
+                <div className="invisible absolute left-0 top-full z-50 mt-1 w-96 rounded border bg-popover p-2 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+                  <div className="flex items-center gap-2 rounded border bg-background px-2 py-1">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search projects"
+                      value={projQuery}
+                      onChange={(e) => setProjQuery(e.target.value)}
+                      className="h-7 border-0 focus-visible:ring-0"
+                    />
+                  </div>
+                  <div className="mt-2 max-h-64 overflow-auto">
+                    {filteredProjects.map((p) => (
+                      <button
+                        key={p.id}
+                        className="flex w-full items-center justify-between rounded px-2 py-1 hover:bg-accent"
+                        onClick={() => {
+                          const proj = projects.find(x => x.id === p.id) || null;
+                          setCurrentProject(proj);
+                          if (proj) {
+                            localStorage.setItem('siq:lastProjectId', proj.id);
+                            router.push(`/projects/${proj.id}`);
+                          }
+                        }}
+                      >
+                        <span className="truncate" title={p.name}>{p.name}</span>
+                      </button>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                      <div className="px-2 py-1 text-xs text-muted-foreground">No projects found</div>
+                    )}
+                  </div>
+                  <div className="mt-2 border-t pt-2">
+                    <button
+                      className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                      onClick={() => router.push('/projects/new' + (currentWorkspace ? `?workspaceId=${currentWorkspace.id}` : ''))}
+                    >
+                      + Create project
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Project Dropdown (Supabase-like) */}
-        <div className="ml-2 hidden md:flex items-center">
-          <div className="relative group">
-            <button className="flex items-center gap-2 rounded border px-2 py-1 text-sm hover:bg-accent">
-              <span className="font-medium">Projects</span>
-              <ChevronsUpDown className="h-4 w-4" />
-            </button>
-            <div className="invisible absolute left-0 top-full z-50 mt-1 w-72 rounded border bg-popover p-1 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
-              <div className="max-h-64 overflow-auto">
-                {projectPills.map((p) => (
-                  <button
-                    key={p.id}
-                    className="flex w-full items-center justify-between rounded px-2 py-1 hover:bg-accent"
-                    onClick={() => {
-                      setCurrentProject(projects.find((x) => x.id === p.id) || null);
-                      router.push(`/projects/${p.id}`);
-                    }}
-                  >
-                    <span className="truncate" title={p.name}>{p.name}</span>
-                    <span className="rounded bg-muted px-2 py-0.5 text-[10px]">{p.short}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-1 border-t pt-1">
-                <button
-                  className="w-full rounded px-2 py-1 text-left hover:bg-accent"
-                  onClick={() => router.push('/projects/new')}
-                >
-                  + Create project
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Removed old standalone Projects dropdown; handled inline above */}
 
         <div className="ml-auto flex items-center space-x-4">
           <SignedOut>

@@ -1,6 +1,6 @@
 import { db } from '@/db';
-import { workspaces, workspaceMembers } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { workspaces, workspaceMembers, projects } from '@/db/schema';
+import { eq, sql } from 'drizzle-orm';
 
 export const workspaceService = {
   fetchUserWorkspaces: async (userId: string) => {
@@ -9,9 +9,12 @@ export const workspaceService = {
         id: workspaces.id,
         name: workspaces.name,
         description: workspaces.description,
+        projectCount: sql<number>`COALESCE(COUNT(${projects.id}), 0)`
       })
       .from(workspaces)
       .innerJoin(workspaceMembers, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(eq(workspaceMembers.profileId, userId));
+      .leftJoin(projects, eq(projects.workspaceId, workspaces.id))
+      .where(eq(workspaceMembers.profileId, userId))
+      .groupBy(workspaces.id, workspaces.name, workspaces.description);
   },
 };

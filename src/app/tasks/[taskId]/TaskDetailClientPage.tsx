@@ -28,6 +28,7 @@ interface TaskDetailData {
   status: string;
   priority: string;
   type?: string;
+  storyPoints?: number | null;
   projectId: string;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -76,6 +77,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const [editStatus, setEditStatus] = useState(task.status);
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editType, setEditType] = useState(task.type || 'feature');
+  const [editStoryPoints, setEditStoryPoints] = useState<string>(task.storyPoints ? String(task.storyPoints) : '');
   const [editAssigneeId, setEditAssigneeId] = useState(task.assignee?.id || 'unassigned');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -143,6 +145,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
         status: editStatus,
         priority: editPriority,
         type: editType,
+        storyPoints: editStoryPoints ? Number(editStoryPoints) : undefined,
         assigneeId: editAssigneeId === 'unassigned' ? undefined : editAssigneeId,
       });
 
@@ -171,6 +174,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
     setEditStatus(task.status);
     setEditPriority(task.priority);
     setEditType(task.type || 'feature');
+    setEditStoryPoints(task.storyPoints ? String(task.storyPoints) : '');
     setEditAssigneeId(task.assignee?.id || 'unassigned');
     setIsEditing(false);
   };
@@ -271,7 +275,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
               </div>
 
               {/* Status and Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   {isEditing ? (
@@ -330,6 +334,22 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                     <Badge>
                       {task.type ? task.type.charAt(0).toUpperCase() + task.type.slice(1) : 'Feature'}
                     </Badge>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="storyPoints">Story Points</Label>
+                  {isEditing ? (
+                    <Input
+                      id="storyPoints"
+                      type="number"
+                      min={0}
+                      value={editStoryPoints}
+                      onChange={(e) => setEditStoryPoints(e.target.value)}
+                      disabled={isSaving}
+                    />
+                  ) : (
+                    <p className="text-sm">{task.storyPoints ?? '—'}</p>
                   )}
                 </div>
               </div>

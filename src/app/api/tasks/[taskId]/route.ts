@@ -29,6 +29,7 @@ export async function GET(
         description: tasks.description,
         status: tasks.status,
         priority: tasks.priority,
+        storyPoints: tasks.storyPoints,
         projectId: tasks.projectId,
         createdAt: tasks.createdAt,
         updatedAt: tasks.updatedAt,
@@ -145,7 +146,15 @@ export async function PATCH(
     const [updatedTask] = await db
       .update(tasks)
       .set({
-        ...updates,
+        ...(updates.title ? { title: updates.title } : {}),
+        ...(updates.description !== undefined ? { description: updates.description } : {}),
+        ...(updates.status ? { status: updates.status } : {}),
+        ...(updates.priority ? { priority: updates.priority } : {}),
+        ...(updates.type ? { type: updates.type } : {}),
+        ...(updates.assigneeId !== undefined ? { assigneeId: updates.assigneeId || null } : {}),
+        ...(updates.sprintId !== undefined ? { sprintId: updates.sprintId || null } : {}),
+        ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
+        ...(updates.storyPoints !== undefined ? { storyPoints: typeof updates.storyPoints === 'number' ? updates.storyPoints : null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId))

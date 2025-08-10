@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Flag, Calendar, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -19,9 +19,12 @@ interface MilestoneLaneProps {
   startDate: Date;
   endDate: Date;
   className?: string;
+  onUpdateMilestoneDate?: (milestoneId: string, newDate: Date) => void;
 }
 
-export function MilestoneLane({ milestones, startDate, endDate, className }: MilestoneLaneProps) {
+export function MilestoneLane({ milestones, startDate, endDate, className, onUpdateMilestoneDate }: MilestoneLaneProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dragState, setDragState] = useState<null | { id: string; originX: number; originDate: Date }>(null);
   const timelineData = useMemo(() => {
     const totalMs = endDate.getTime() - startDate.getTime();
     const now = new Date();
@@ -92,6 +95,31 @@ export function MilestoneLane({ milestones, startDate, endDate, className }: Mil
     return weeks;
   }, [startDate, endDate]);
 
+  const pxToDays = (dxPx: number) => {
+    const el = containerRef.current;
+    if (!el) return 0;
+    const totalPx = el.clientWidth;
+    const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    return (dxPx / totalPx) * totalDays;
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragState) return;
+    e.preventDefault();
+  };
+
+  const onPointerUp = async (e: React.PointerEvent) => {
+    if (!dragState) return;
+    const dx = e.clientX - dragState.originX;
+    const dDays = Math.round(pxToDays(dx));
+    const newDate = new Date(dragState.originDate);
+    newDate.setDate(newDate.getDate() + dDays);
+    if (onUpdateMilestoneDate) {
+      await onUpdateMilestoneDate(dragState.id, newDate);
+    }
+    setDragState(null);
+  };
+
   return (
     <Card className={className}>
       <CardHeader>
@@ -116,7 +144,7 @@ export function MilestoneLane({ milestones, startDate, endDate, className }: Mil
           </div>
 
           {/* Milestone timeline */}
-          <div className="relative h-16 bg-gray-50 rounded-lg">
+          <div ref={containerRef} className="relative h-16 bg-gray-50 rounded-lg" onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
             {/* Background grid */}
             {timeGrid.map((week, index) => (
               <div
@@ -140,6 +168,7 @@ export function MilestoneLane({ milestones, startDate, endDate, className }: Mil
                     hover:scale-110 transition-transform cursor-pointer
                   `}
                   title={`${milestone.name} - ${milestone.dueDate.toLocaleDateString()}`}
+                  onPointerDown={(e) => setDragState({ id: milestone.id, originX: e.clientX, originDate: milestone.dueDate })}
                 >
                   {getStatusIcon(milestone.status, milestone.isOverdue)}
                 </div>

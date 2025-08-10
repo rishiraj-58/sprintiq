@@ -20,6 +20,7 @@ interface TaskCreate {
   type?: string;
   projectId: string;
   assigneeId?: string;
+  storyPoints?: number;
 }
 
 interface TaskUpdate {
@@ -29,6 +30,9 @@ interface TaskUpdate {
   priority?: string;
   type?: string;
   assigneeId?: string;
+  storyPoints?: number;
+  sprintId?: string | null;
+  dueDate?: Date | string;
 }
 
 interface CommentWithAuthor {

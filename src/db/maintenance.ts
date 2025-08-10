@@ -88,6 +88,12 @@ export async function ensureCoreSchema(): Promise<void> {
     cleared_at timestamp
   )`);
 
+  // Ensure tasks.story_points column exists
+  const hasStoryPoints = await columnExists('tasks', 'story_points');
+  if (!hasStoryPoints) {
+    await db.execute(sql`alter table tasks add column if not exists story_points integer`);
+  }
+
   await db.execute(sql`create table if not exists calendar_events (
     id uuid primary key default gen_random_uuid(),
     project_id uuid not null references projects(id),

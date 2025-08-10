@@ -9,7 +9,7 @@ import { PermissionManager } from '@/lib/permissions';
 export async function POST(request: Request) {
   try {
     const profile = await requireAuth();
-    const { title, description, status, priority, projectId, assigneeId, type } = await request.json();
+    const { title, description, status, priority, projectId, assigneeId, type, storyPoints } = await request.json();
 
     if (!title || !projectId) {
       return new NextResponse('Title and project ID are required', { status: 400 });
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
         status: status || 'todo',
         priority: priority || 'medium',
         projectId,
+        storyPoints: typeof storyPoints === 'number' ? storyPoints : null,
         assigneeId,
         creatorId: profile.id,
       })

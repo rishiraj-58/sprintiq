@@ -84,6 +84,7 @@ export const tasks = pgTable('tasks', {
   assigneeId: varchar('assignee_id', { length: 255 }).references(() => profiles.id),
   creatorId: varchar('creator_id', { length: 255 }).notNull().references(() => profiles.id),
   sprintId: uuid('sprint_id').references(() => sprints.id),
+  storyPoints: integer('story_points'),
   dueDate: timestamp('due_date'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

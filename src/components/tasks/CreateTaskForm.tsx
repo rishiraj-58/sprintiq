@@ -34,6 +34,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
   const [status, setStatus] = useState('todo');
   const [type, setType] = useState('feature');
   const [assigneeId, setAssigneeId] = useState<string>('unassigned');
+  const [storyPoints, setStoryPoints] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createTask } = useTask();
@@ -70,6 +71,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
         status,
         projectId,
         assigneeId: assigneeId === 'unassigned' ? undefined : assigneeId,
+        storyPoints: storyPoints ? Number(storyPoints) : undefined,
       });
 
       toast({
@@ -84,6 +86,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setType('feature');
       setStatus('todo');
       setAssigneeId('unassigned');
+      setStoryPoints('');
       setOpen(false);
     } catch (error) {
       toast({
@@ -105,6 +108,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setType('feature');
       setStatus('todo');
       setAssigneeId('unassigned');
+      setStoryPoints('');
     }
     setOpen(newOpen);
   };
@@ -213,6 +217,19 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="storyPoints">Story Points (optional)</Label>
+            <Input
+              id="storyPoints"
+              type="number"
+              min={0}
+              value={storyPoints}
+              onChange={(e) => setStoryPoints(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="e.g., 3"
+            />
           </div>
 
           <DialogFooter>

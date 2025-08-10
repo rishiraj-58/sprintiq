@@ -53,7 +53,7 @@ export async function GET(
     if (to) taskWhere.push(lte(tasks.dueDate, new Date(to)));
 
     const taskRows = await db
-      .select({ id: tasks.id, title: tasks.title, status: tasks.status, type: tasks.type, sprintId: tasks.sprintId, dueDate: tasks.dueDate })
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status, type: tasks.type, sprintId: tasks.sprintId, dueDate: tasks.dueDate, storyPoints: tasks.storyPoints })
       .from(tasks)
       .where(and(...taskWhere));
 

@@ -31,6 +31,8 @@ export function Timeline({ projectId }: TimelineProps) {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<{ status?: string; type?: string }>(() => ({}));
   const [selectedSprintId, setSelectedSprintId] = useState<string>('');
+  const [groupBy, setGroupBy] = useState<'type' | 'sprint'>('type');
+  const [rangeOverride, setRangeOverride] = useState<{ startDate: Date | null; endDate: Date | null }>({ startDate: null, endDate: null });
 
   useEffect(() => {
     (async () => {
@@ -84,8 +86,10 @@ export function Timeline({ projectId }: TimelineProps) {
     const endDate = new Date(maxDate);
     endDate.setDate(endDate.getDate() + 14);
     
-    return { startDate, endDate };
-  }, [data]);
+    const finalStart = rangeOverride.startDate ?? startDate;
+    const finalEnd = rangeOverride.endDate ?? endDate;
+    return { startDate: finalStart, endDate: finalEnd };
+  }, [data, rangeOverride]);
 
   // Transform data for visualization components
   const ganttItems = useMemo(() => {
@@ -208,7 +212,7 @@ export function Timeline({ projectId }: TimelineProps) {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <div className="flex gap-4 items-center">
+      <div className="flex flex-wrap gap-4 items-center">
         <Select value={filters.type ?? 'all'} onValueChange={(value) => setFilters(f => ({ ...f, type: value === 'all' ? undefined : value }))}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All types" />
@@ -248,6 +252,45 @@ export function Timeline({ projectId }: TimelineProps) {
             </SelectContent>
           </Select>
         )}
+
+        <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'type'|'sprint')}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Group by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="type">Group: Type</SelectItem>
+            <SelectItem value="sprint">Group: Sprint</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            const spanDays = Math.ceil((timelineRange.endDate.getTime() - timelineRange.startDate.getTime()) / (1000*60*60*24));
+            const pad = Math.ceil(spanDays * 0.2);
+            const start = new Date(timelineRange.startDate); start.setDate(start.getDate() - pad);
+            const end = new Date(timelineRange.endDate); end.setDate(end.getDate() + pad);
+            setRangeOverride({ startDate: start, endDate: end });
+          }}>Zoom Out</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const spanDays = Math.ceil((timelineRange.endDate.getTime() - timelineRange.startDate.getTime()) / (1000*60*60*24));
+            const cut = Math.max(1, Math.floor(spanDays * 0.2));
+            const start = new Date(timelineRange.startDate); start.setDate(start.getDate() + cut);
+            const end = new Date(timelineRange.endDate); end.setDate(end.getDate() - cut);
+            setRangeOverride({ startDate: start, endDate: end });
+          }}>Zoom In</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const shift = 7; // days
+            const start = new Date(timelineRange.startDate); start.setDate(start.getDate() - shift);
+            const end = new Date(timelineRange.endDate); end.setDate(end.getDate() - shift);
+            setRangeOverride({ startDate: start, endDate: end });
+          }}>Pan ←</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const shift = 7; // days
+            const start = new Date(timelineRange.startDate); start.setDate(start.getDate() + shift);
+            const end = new Date(timelineRange.endDate); end.setDate(end.getDate() + shift);
+            setRangeOverride({ startDate: start, endDate: end });
+          }}>Pan →</Button>
+        </div>
       </div>
 
       {/* Timeline Visualizations */}
@@ -266,6 +309,26 @@ export function Timeline({ projectId }: TimelineProps) {
             items={ganttItems}
             startDate={timelineRange.startDate}
             endDate={timelineRange.endDate}
+            groupBy={groupBy}
+            sprintOptions={(data.sprints || []).map((s:any)=>({ id: s.id, name: s.name }))}
+            onUpdateTaskDueDate={async (taskId, newDue) => {
+              await fetch(`/api/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ dueDate: newDue }), headers: { 'Content-Type': 'application/json' } });
+              const res = await fetch(`/api/projects/${projectId}/timeline`);
+              const json = await res.json();
+              setData(json);
+            }}
+            onAssignTaskToSprint={async (taskId, sprintId) => {
+              await fetch(`/api/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ sprintId }), headers: { 'Content-Type': 'application/json' } });
+              const res = await fetch(`/api/projects/${projectId}/timeline`);
+              const json = await res.json();
+              setData(json);
+            }}
+            onUpdateSprintDates={async (sprintId, newStart, newEnd) => {
+              await fetch(`/api/sprints/${sprintId}`, { method: 'PATCH', body: JSON.stringify({ startDate: newStart, endDate: newEnd }), headers: { 'Content-Type': 'application/json' } });
+              const res = await fetch(`/api/projects/${projectId}/timeline`);
+              const json = await res.json();
+              setData(json);
+            }}
           />
         </TabsContent>
         
@@ -294,6 +357,12 @@ export function Timeline({ projectId }: TimelineProps) {
             milestones={data.milestones || []}
             startDate={timelineRange.startDate}
             endDate={timelineRange.endDate}
+            onUpdateMilestoneDate={async (milestoneId, newDate) => {
+              await fetch(`/api/milestones/${milestoneId}`, { method: 'PATCH', body: JSON.stringify({ dueDate: newDate }), headers: { 'Content-Type': 'application/json' } });
+              const res = await fetch(`/api/projects/${projectId}/timeline`);
+              const json = await res.json();
+              setData(json);
+            }}
           />
         </TabsContent>
         

@@ -28,9 +28,12 @@ interface TaskCardProps {
     avatarUrl: string | null;
   } | null;
   onEdit?: (task: Task) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (taskId: string) => void;
 }
 
-export function TaskCard({ task, assignee, onEdit }: TaskCardProps) {
+export function TaskCard({ task, assignee, onEdit, selectMode = false, selected = false, onToggleSelect }: TaskCardProps) {
   const { updateTask, deleteTask } = useTask();
   const { currentWorkspace } = useWorkspace();
   const { canEdit, canDelete } = usePermissions('workspace', currentWorkspace?.id);
@@ -94,9 +97,8 @@ export function TaskCard({ task, assignee, onEdit }: TaskCardProps) {
     }
   };
 
-  return (
-    <Link href={`/tasks/${task.id}`} className="block">
-      <Card className="hover:shadow-md transition-shadow cursor-pointer">
+  const CardInner = (
+      <Card className={`hover:shadow-md transition-shadow ${selectMode ? 'cursor-default' : 'cursor-pointer'}`}>
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <CardTitle className="text-sm font-medium line-clamp-2">
@@ -137,6 +139,18 @@ export function TaskCard({ task, assignee, onEdit }: TaskCardProps) {
           </div>
         </CardHeader>
       <CardContent className="pt-0">
+        {selectMode && (
+          <div className="mb-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggleSelect && onToggleSelect(task.id)}
+              />
+              Select
+            </label>
+          </div>
+        )}
         {task.description && (
           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
             {task.description}
@@ -180,6 +194,19 @@ export function TaskCard({ task, assignee, onEdit }: TaskCardProps) {
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (selectMode) {
+    return (
+      <div onClick={() => onToggleSelect && onToggleSelect(task.id)}>
+        {CardInner}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/tasks/${task.id}`} className="block">
+      {CardInner}
     </Link>
   );
 }

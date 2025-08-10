@@ -4,6 +4,7 @@ import { workspaceService } from '@/services/workspace';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import WorkspaceSearchAndList from './WorkspaceSearchAndList';
+import { WorkspaceNavbar } from '@/components/layout/WorkspaceNavbar';
 
 export default async function WorkspacesPage() {
   const profile = await getCurrentUserProfile();
@@ -12,15 +13,11 @@ export default async function WorkspacesPage() {
   const userWorkspaces = await workspaceService.fetchUserWorkspaces(profile.id);
 
   return (
-    <div className="mx-auto max-w-5xl p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl md:text-2xl font-semibold">SprintIQ <span className="text-muted-foreground">/</span> Workspaces</h1>
-        <Link href="/workspaces/new">
-          <Button>Create Workspace</Button>
-        </Link>
+    <div className="min-h-screen bg-background">
+      <WorkspaceNavbar />
+      <div className="mx-auto max-w-5xl p-6 space-y-6">
+        <WorkspaceSearchAndList initialItems={userWorkspaces} />
       </div>
-
-      <WorkspaceSearchAndList initialItems={userWorkspaces} />
     </div>
   );
 }

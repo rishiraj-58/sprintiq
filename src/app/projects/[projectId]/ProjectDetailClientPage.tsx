@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type Project } from '@/db/schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus, Trash2, Flag } from 'lucide-react';
+import { ProjectSidebar } from './ProjectSidebar';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUser } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,7 +29,13 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState('overview');
+  const searchParams = useSearchParams();
+  const initialTab = (() => {
+    const t = searchParams?.get('tab');
+    const allowed = new Set(['overview','tasks','timeline','team','settings']);
+    return t && allowed.has(t) ? t : 'overview';
+  })();
+  const [activeTab, setActiveTab] = useState(initialTab);
   const { setCurrentProject } = useProject();
 
   const projectPerms = usePermissions('project', project.id);
@@ -68,6 +75,15 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
     };
     loadMembers();
   }, [project.id]);
+
+  // Keep tab in sync if query param changes (e.g., from sidebar links)
+  useEffect(() => {
+    const t = searchParams?.get('tab');
+    const allowed = new Set(['overview','tasks','timeline','team','settings']);
+    if (t && allowed.has(t) && t !== activeTab) {
+      setActiveTab(t);
+    }
+  }, [searchParams, activeTab]);
 
   // Debug logging
   console.log('ProjectDetailClientPage Debug:', {
@@ -125,23 +141,12 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
       <div className="flex gap-6">
         <aside className="w-56 shrink-0">
           <div className="sticky top-20">
-            <div className="grid gap-1">
-              <button onClick={() => setActiveTab('overview')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='overview'?'bg-accent':''}`}>
-                <div className="flex items-center gap-2"><FileText className="h-4 w-4" /> Overview</div>
-              </button>
-              <button onClick={() => setActiveTab('tasks')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='tasks'?'bg-accent':''}`}>
-                <div className="flex items-center gap-2"><CheckSquare className="h-4 w-4" /> Tasks</div>
-              </button>
-              <button onClick={() => setActiveTab('timeline')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='timeline'?'bg-accent':''}`}>
-                <div className="flex items-center gap-2"><Clock className="h-4 w-4" /> Timeline</div>
-              </button>
-              <button onClick={() => setActiveTab('team')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='team'?'bg-accent':''}`}>
-                <div className="flex items-center gap-2"><User className="h-4 w-4" /> Team</div>
-              </button>
-              <button onClick={() => setActiveTab('settings')} className={`text-left rounded px-3 py-2 text-sm ${activeTab==='settings'?'bg-accent':''}`}>
-                <div className="flex items-center gap-2"><Settings className="h-4 w-4" /> Settings</div>
-              </button>
-            </div>
+            <ProjectSidebar
+              projectId={project.id}
+              active={activeTab as any}
+              mode="tabs"
+              onSelect={(k) => setActiveTab(k)}
+            />
             {activeTab === 'tasks' && canCreate && (
               <div className="mt-4">
               <CreateTaskForm projectId={project.id}>

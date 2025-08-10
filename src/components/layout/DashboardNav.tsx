@@ -11,9 +11,11 @@ function useWorkspaceScopedNav(workspaceId?: string) {
   return [
     { title: 'Projects', href: `${base}`, icon: 'LayoutDashboard' },
     { title: 'Team', href: `/workspaces/${workspaceId}/team`, icon: 'Users' },
-    { title: 'Integrations', href: `${base}/integrations`, icon: 'Puzzle' },
+    { title: 'Reports', href: `${base}/reports`, icon: 'BarChartBig' },
     { title: 'Usage', href: `${base}/usage`, icon: 'BarChart' },
     { title: 'Billing', href: `${base}/billing`, icon: 'CreditCard' },
+    { title: 'Audit Logs', href: `${base}/audit-logs`, icon: 'FileClock' },
+    { title: 'Integrations', href: `${base}/integrations`, icon: 'Puzzle' },
     { title: 'Organization Settings', href: `/workspaces/${workspaceId}/settings`, icon: 'Settings' },
   ];
 }
@@ -21,12 +23,17 @@ function useWorkspaceScopedNav(workspaceId?: string) {
 export function DashboardNav() {
   const pathname = usePathname();
   const { currentWorkspace } = useWorkspace();
-  const { canManageMembers, canManageSettings } = usePermissions('workspace', currentWorkspace?.id);
+  const { canManageMembers, canManageSettings, canView } = usePermissions('workspace', currentWorkspace?.id);
   const navItems = useWorkspaceScopedNav(currentWorkspace?.id);
 
   return (
     <nav className="grid items-start gap-2">
-      {navItems.map((item) => (
+      {navItems.map((item) => {
+        // Basic gating by capability
+        if (item.title === 'Team' && !canManageMembers) return null;
+        if ((item.title === 'Organization Settings' || item.title === 'Billing' || item.title === 'Usage' || item.title === 'Audit Logs') && !canManageSettings) return null;
+        if ((item.title === 'Projects' || item.title === 'Reports' || item.title === 'Integrations') && !canView) return null;
+        return (
         <Link
           key={item.href}
           href={item.href}
@@ -37,7 +44,8 @@ export function DashboardNav() {
         >
           <span>{item.title}</span>
         </Link>
-      ))}
+        );
+      })}
       {/* Placeholder links for future sections; main ones active are Projects, Team, Settings */}
     </nav>
   );

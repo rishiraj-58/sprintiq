@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
+import { WorkspaceNavbar } from '@/components/layout/WorkspaceNavbar';
 
 export default function NewWorkspacePage() {
   const router = useRouter();
@@ -38,8 +39,10 @@ export default function NewWorkspacePage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 className="text-2xl font-semibold">Create workspace</h1>
+    <div className="min-h-screen bg-background">
+      <WorkspaceNavbar label="New workspace" />
+      <div className="mx-auto max-w-xl space-y-4 p-6">
+        <h1 className="text-2xl font-semibold">Create workspace</h1>
       <div className="space-y-2">
         <label className="text-sm">Name</label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Inc" />
@@ -49,6 +52,7 @@ export default function NewWorkspacePage() {
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
       </div>
       <Button onClick={submit} disabled={loading}>{loading ? 'Creating…' : 'Create workspace'}</Button>
+      </div>
     </div>
   );
 }

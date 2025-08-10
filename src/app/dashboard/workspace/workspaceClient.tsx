@@ -36,6 +36,7 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
 
   return (
     <div className="space-y-6">
+      {/* Owner widgets removed per request */}
       <div className="flex items-center gap-3">
         <Link href={`/projects/new?workspaceId=${workspace.id}`}>
           <Button>New Project</Button>

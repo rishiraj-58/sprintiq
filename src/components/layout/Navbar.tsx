@@ -8,12 +8,14 @@ import { useProject } from "@/stores/hooks/useProject";
 import { useRouter } from "next/navigation";
 import { ChevronsUpDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export function Navbar() {
   const router = useRouter();
   const { workspaces, currentWorkspace, fetchWorkspaces, setCurrentWorkspace } = useWorkspace();
   const { projects, currentProject, fetchProjects, setCurrentProject } = useProject();
   const [isReady, setIsReady] = useState(false);
+  const wsPerms = usePermissions('workspace', currentWorkspace?.id);
 
   useEffect(() => {
     const init = async () => {
@@ -113,11 +115,21 @@ export function Navbar() {
               <div className="mt-2 border-t pt-2">
                 <button
                   className="w-full rounded px-2 py-1 text-left hover:bg-accent"
-                  onClick={() => router.push('/workspaces/new')}
+                  onClick={() => router.push('/workspaces')}
                 >
-                  + Create workspace
+                  View all workspaces
                 </button>
               </div>
+              {wsPerms.canCreate && (
+                <div className="mt-2 border-t pt-2">
+                  <button
+                    className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                    onClick={() => router.push('/workspaces/new')}
+                  >
+                    + Create workspace
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -161,14 +173,16 @@ export function Navbar() {
                       <div className="px-2 py-1 text-xs text-muted-foreground">No projects found</div>
                     )}
                   </div>
-                  <div className="mt-2 border-t pt-2">
-                    <button
-                      className="w-full rounded px-2 py-1 text-left hover:bg-accent"
-                      onClick={() => router.push('/projects/new' + (currentWorkspace ? `?workspaceId=${currentWorkspace.id}` : ''))}
-                    >
-                      + Create project
-                    </button>
-                  </div>
+                  {wsPerms.canCreate && (
+                    <div className="mt-2 border-t pt-2">
+                      <button
+                        className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                        onClick={() => router.push('/projects/new' + (currentWorkspace ? `?workspaceId=${currentWorkspace.id}` : ''))}
+                      >
+                        + Create project
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </>

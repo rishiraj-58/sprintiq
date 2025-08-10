@@ -17,6 +17,7 @@ interface TaskCreate {
   description?: string;
   status?: string;
   priority?: string;
+  type?: string;
   projectId: string;
   assigneeId?: string;
 }
@@ -26,6 +27,7 @@ interface TaskUpdate {
   description?: string;
   status?: string;
   priority?: string;
+  type?: string;
   assigneeId?: string;
 }
 
@@ -48,6 +50,7 @@ interface TaskFilters {
   status?: string;
   priority?: string;
   assigneeId?: string;
+  type?: string;
 }
 
 interface TaskWithDetails {
@@ -124,6 +127,7 @@ export const createTaskSlice: StateCreator<TaskState> = (set, get) => ({
       if (filters.status) params.append('status', filters.status);
       if (filters.priority) params.append('priority', filters.priority);
       if (filters.assigneeId) params.append('assigneeId', filters.assigneeId);
+      if (filters.type) params.append('type', filters.type);
       
       const response = await fetch(`/api/tasks?${params.toString()}`);
       if (!response.ok) {

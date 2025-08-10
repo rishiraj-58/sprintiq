@@ -46,6 +46,85 @@ export async function ensureProjectMembersTable(): Promise<void> {
 export async function ensureCoreSchema(): Promise<void> {
   await ensureInvitationsProjectIdColumn();
   await ensureProjectMembersTable();
+  // Ensure tasks.type column exists
+  const hasTaskType = await (async () => {
+    const result = await db.execute(sql`select count(*)::int as count from information_schema.columns where table_name = 'tasks' and column_name = 'type'`);
+    const row = Array.isArray(result) ? (result as any)[0] : (result as any).rows?.[0];
+    const count = row?.count ?? row?.COUNT ?? 0;
+    return Number(count) > 0;
+  })();
+  if (!hasTaskType) {
+    await db.execute(sql`alter table tasks add column if not exists type varchar(30) default 'feature' not null`);
+  }
+
+  // Ensure optional timeline tables
+  await db.execute(sql`create table if not exists milestones (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(120) not null,
+    description text,
+    due_date timestamp,
+    status varchar(20) not null default 'planned',
+    created_at timestamp default now(),
+    updated_at timestamp default now()
+  )`);
+
+  await db.execute(sql`create table if not exists releases (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(120) not null,
+    date timestamp,
+    notes text,
+    created_at timestamp default now(),
+    updated_at timestamp default now()
+  )`);
+
+  await db.execute(sql`create table if not exists blockers (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    task_id uuid references tasks(id),
+    note text,
+    started_at timestamp default now(),
+    cleared_at timestamp
+  )`);
+
+  await db.execute(sql`create table if not exists calendar_events (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(200) not null,
+    date timestamp not null,
+    kind varchar(30) not null default 'meeting',
+    notes text,
+    created_at timestamp default now(),
+    updated_at timestamp default now()
+  )`);
+
+  await db.execute(sql`create table if not exists project_phases (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(120) not null,
+    start_date timestamp,
+    end_date timestamp,
+    sort_order integer default 0
+  )`);
+
+  await db.execute(sql`create table if not exists capacity_windows (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(120) not null,
+    start_date timestamp,
+    end_date timestamp,
+    kind varchar(30) not null default 'holiday'
+  )`);
+
+  await db.execute(sql`create table if not exists policies (
+    id uuid primary key default gen_random_uuid(),
+    project_id uuid not null references projects(id),
+    name varchar(120) not null,
+    start_date timestamp,
+    end_date timestamp,
+    kind varchar(30) not null default 'code_freeze'
+  )`);
 }
 
 

@@ -77,6 +77,7 @@ export const tasks = pgTable('tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
   title: varchar('title', { length: 200 }).notNull(),
   description: text('description'),
+  type: varchar('type', { length: 30 }).notNull().default('feature'),
   status: varchar('status', { length: 20 }).notNull().default('todo'),
   priority: varchar('priority', { length: 20 }).notNull().default('medium'),
   projectId: uuid('project_id').notNull().references(() => projects.id),
@@ -111,6 +112,81 @@ export const sprints = pgTable('sprints', {
   endDate: timestamp('end_date'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// Milestones
+export const milestones = pgTable('milestones', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  description: text('description'),
+  dueDate: timestamp('due_date'),
+  status: varchar('status', { length: 20 }).notNull().default('planned'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Releases
+export const releases = pgTable('releases', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  date: timestamp('date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Blockers/Flags
+export const blockers = pgTable('blockers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  taskId: uuid('task_id').references(() => tasks.id),
+  note: text('note'),
+  startedAt: timestamp('started_at').defaultNow(),
+  clearedAt: timestamp('cleared_at'),
+});
+
+// Calendar Events (meetings, external deadlines, compliance)
+export const calendarEvents = pgTable('calendar_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 200 }).notNull(),
+  date: timestamp('date').notNull(),
+  kind: varchar('kind', { length: 30 }).notNull().default('meeting'), // meeting | external | compliance
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Project Phases overlay
+export const projectPhases = pgTable('project_phases', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  sortOrder: integer('sort_order').default(0),
+});
+
+// Capacity windows overlay (holidays, team leave, blackout)
+export const capacityWindows = pgTable('capacity_windows', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  kind: varchar('kind', { length: 30 }).notNull().default('holiday'), // holiday | leave | blackout
+});
+
+// Policy windows overlay (e.g., code freeze)
+export const policies = pgTable('policies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  name: varchar('name', { length: 120 }).notNull(),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  kind: varchar('kind', { length: 30 }).notNull().default('code_freeze'),
 });
 
 // Comments

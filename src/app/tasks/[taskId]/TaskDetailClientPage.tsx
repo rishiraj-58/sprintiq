@@ -27,6 +27,7 @@ interface TaskDetailData {
   description: string | null;
   status: string;
   priority: string;
+  type?: string;
   projectId: string;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -74,6 +75,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const [editDescription, setEditDescription] = useState(task.description || '');
   const [editStatus, setEditStatus] = useState(task.status);
   const [editPriority, setEditPriority] = useState(task.priority);
+  const [editType, setEditType] = useState(task.type || 'feature');
   const [editAssigneeId, setEditAssigneeId] = useState(task.assignee?.id || 'unassigned');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -140,6 +142,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
         description: editDescription.trim() || undefined,
         status: editStatus,
         priority: editPriority,
+        type: editType,
         assigneeId: editAssigneeId === 'unassigned' ? undefined : editAssigneeId,
       });
 
@@ -167,6 +170,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
     setEditDescription(task.description || '');
     setEditStatus(task.status);
     setEditPriority(task.priority);
+    setEditType(task.type || 'feature');
     setEditAssigneeId(task.assignee?.id || 'unassigned');
     setIsEditing(false);
   };
@@ -267,7 +271,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
               </div>
 
               {/* Status and Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   {isEditing ? (
@@ -304,6 +308,27 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                   ) : (
                     <Badge variant={getPriorityColor(task.priority)}>
                       {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="type">Type</Label>
+                  {isEditing ? (
+                    <Select value={editType} onValueChange={setEditType} disabled={isSaving}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="feature">Feature</SelectItem>
+                        <SelectItem value="bug">Bug</SelectItem>
+                        <SelectItem value="chore">Chore</SelectItem>
+                        <SelectItem value="improvement">Improvement</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge>
+                      {task.type ? task.type.charAt(0).toUpperCase() + task.type.slice(1) : 'Feature'}
                     </Badge>
                   )}
                 </div>

@@ -119,31 +119,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   return (
     <div className="space-y-6">
       {/* Navbar is provided by projects layout */}
-      {/* Project Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-          <p className="text-muted-foreground">
-            {project.description || 'No description provided'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
-            {project.status}
-          </Badge>
-          {canDelete && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDeleteProject}
-            >
-              Delete Project
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <Separator />
+      {/* Project header moved into Overview tab */}
 
       {/* Project Sidebar + Content */}
       <div className="flex gap-6">
@@ -185,6 +161,30 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
         {/* Overview Tab Content */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Project Header (Overview only) */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
+          <p className="text-muted-foreground">
+            {project.description || 'No description provided'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+            {project.status}
+          </Badge>
+          {canDelete && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteProject}
+            >
+              Delete Project
+            </Button>
+          )}
+        </div>
+      </div>
+      <Separator />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

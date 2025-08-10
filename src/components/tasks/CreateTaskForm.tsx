@@ -32,6 +32,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [status, setStatus] = useState('todo');
+  const [type, setType] = useState('feature');
   const [assigneeId, setAssigneeId] = useState<string>('unassigned');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,6 +66,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
+        type,
         status,
         projectId,
         assigneeId: assigneeId === 'unassigned' ? undefined : assigneeId,
@@ -79,6 +81,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setTitle('');
       setDescription('');
       setPriority('medium');
+      setType('feature');
       setStatus('todo');
       setAssigneeId('unassigned');
       setOpen(false);
@@ -99,6 +102,7 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
       setTitle('');
       setDescription('');
       setPriority('medium');
+      setType('feature');
       setStatus('todo');
       setAssigneeId('unassigned');
     }
@@ -168,6 +172,20 @@ export function CreateTaskForm({ children, projectId }: CreateTaskFormProps) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <Select value={type} onValueChange={setType} disabled={isSubmitting}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="feature">Feature</SelectItem>
+                  <SelectItem value="bug">Bug</SelectItem>
+                  <SelectItem value="chore">Chore</SelectItem>
+                  <SelectItem value="improvement">Improvement</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
               <Select value={priority} onValueChange={setPriority} disabled={isSubmitting}>

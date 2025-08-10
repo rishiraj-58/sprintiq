@@ -9,7 +9,7 @@ import { PermissionManager } from '@/lib/permissions';
 export async function POST(request: Request) {
   try {
     const profile = await requireAuth();
-    const { title, description, status, priority, projectId, assigneeId } = await request.json();
+    const { title, description, status, priority, projectId, assigneeId, type } = await request.json();
 
     if (!title || !projectId) {
       return new NextResponse('Title and project ID are required', { status: 400 });
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       .values({
         title,
         description,
+        type: type || 'feature',
         status: status || 'todo',
         priority: priority || 'medium',
         projectId,
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
     const priority = searchParams.get('priority');
     const assigneeId = searchParams.get('assigneeId');
+    const type = searchParams.get('type');
 
     if (!projectId) {
       return new NextResponse('Project ID is required', { status: 400 });
@@ -133,6 +135,9 @@ export async function GET(request: Request) {
         filterConditions.push(eq(tasks.assigneeId, assigneeId));
       }
     }
+    if (type) {
+      filterConditions.push(eq(tasks.type, type));
+    }
 
     // Fetch all tasks for the project with assignee details
     const assigneeProfiles = alias(profiles, 'assignee_profiles');
@@ -143,6 +148,7 @@ export async function GET(request: Request) {
         title: tasks.title,
         description: tasks.description,
         status: tasks.status,
+        type: tasks.type,
         priority: tasks.priority,
         projectId: tasks.projectId,
         assigneeId: tasks.assigneeId,

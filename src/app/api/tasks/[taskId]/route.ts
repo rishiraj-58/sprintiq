@@ -110,6 +110,7 @@ export async function PATCH(
         id: tasks.id,
         projectId: tasks.projectId,
         workspaceId: projects.workspaceId,
+        type: tasks.type,
       })
       .from(tasks)
       .innerJoin(projects, eq(tasks.projectId, projects.id))

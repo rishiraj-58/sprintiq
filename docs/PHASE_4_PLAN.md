@@ -34,7 +34,7 @@ This section covers features and fixes within the scope of a single project.
 #### 1.1.2. Sub-tasks
 * **Issue:** `POST /api/tasks/.../subtasks` returns a 500 error.
 * **To-Do List:**
-    -   [ ] **Schema:** Create a `SubTask` model in `schema.prisma`.
+    -   [x] **Schema:** Create a `SubTask` model in `schema.prisma`.
         ```prisma
         model SubTask {
           id          String   @id @default(uuid())
@@ -48,9 +48,9 @@ This section covers features and fixes within the scope of a single project.
           updatedAt   DateTime @updatedAt
         }
         ```
-    -   [ ] **Backend:** Implement the `POST` method in `src/app/api/tasks/[taskId]/subtasks/route.ts` to create a new sub-task linked to the parent task.
-    -   [ ] **Backend:** Implement `PATCH` and `DELETE` endpoints for updating and deleting sub-tasks.
-    -   [ ] **Frontend:** Ensure the "Sub-tasks" component on the task page can create, display, and update the status of sub-tasks.
+    -   [x] **Backend:** Implement the `POST` method in `src/app/api/tasks/[taskId]/subtasks/route.ts` to create a new sub-task linked to the parent task.
+    -   [x] **Backend:** Implement `PATCH` and `DELETE` endpoints for updating and deleting sub-tasks.
+    -   [x] **Frontend:** Ensure the "Sub-tasks" component on the task page can create, display, and update the status of sub-tasks.
 
 ### 1.2. Sprints & Timeline
 * **To-Do List:**

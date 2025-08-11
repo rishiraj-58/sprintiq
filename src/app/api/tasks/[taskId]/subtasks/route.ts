@@ -60,11 +60,15 @@ export async function POST(
   try {
     const profile = await requireAuth();
     const { taskId } = params;
-    const { title } = await request.json();
+    const { title, assigneeId } = await request.json();
     if (!title || !title.trim()) return new NextResponse('Title required', { status: 400 });
 
     const [task] = await db
-      .select({ workspaceId: projects.workspaceId })
+      .select({ 
+        workspaceId: projects.workspaceId,
+        taskAssigneeId: tasks.assigneeId,
+        projectOwnerId: projects.ownerId,
+      })
       .from(tasks)
       .innerJoin(projects, eq(tasks.projectId, projects.id))
       .where(eq(tasks.id, taskId));
@@ -79,9 +83,12 @@ export async function POST(
     const capabilities = await PermissionManager.getUserCapabilities(profile.id, task.workspaceId);
     if (!capabilities.includes('edit')) return new NextResponse('Forbidden', { status: 403 });
 
+    // Determine default assignee: prefer parent task's assignee, else project's owner, unless explicitly provided
+    const defaultAssignee = assigneeId ?? task.taskAssigneeId ?? task.projectOwnerId ?? null;
+
     const [created] = await db
       .insert(taskSubtasks)
-      .values({ taskId, title: title.trim() })
+      .values({ taskId, title: title.trim(), assigneeId: defaultAssignee })
       .returning();
 
     return NextResponse.json(created, { status: 201 });

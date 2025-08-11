@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Save } from 'lucide-react';
+import { Plus, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -92,6 +92,16 @@ export function SubTasks({ taskId, workspaceId }: SubTasksProps) {
     }
   };
 
+  const deleteSubtask = async (id: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      setItems(prev => prev.filter(i => i.id !== id));
+    } catch (e) {
+      toast({ title: 'Error', description: 'Delete failed', variant: 'destructive' });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -131,6 +141,11 @@ export function SubTasks({ taskId, workspaceId }: SubTasksProps) {
                       {(item.assignee.firstName?.[0]||'')}{(item.assignee.lastName?.[0]||'')}
                     </AvatarFallback>
                   </Avatar>
+                )}
+                {canEdit && (
+                  <button className="text-muted-foreground hover:text-destructive" onClick={() => deleteSubtask(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             ))

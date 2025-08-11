@@ -1,0 +1,767 @@
+'use client';
+
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel
+} from '@/components/ui/dropdown-menu';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  MoreHorizontal, 
+  Calendar,
+  User,
+  Flag,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  ArrowUpDown,
+  List,
+  LayoutGrid,
+  Eye,
+  Edit,
+  Trash2,
+  Circle
+} from 'lucide-react';
+
+// Static task data
+const tasks = [
+  {
+    id: 'TASK-001',
+    title: 'Implement user authentication system',
+    description: 'Create a secure authentication system with OAuth integration',
+    status: 'in_progress',
+    priority: 'high',
+    assignee: {
+      id: '1',
+      name: 'Sarah Chen',
+      email: 'sarah@company.com',
+      avatar: null
+    },
+    reporter: {
+      id: '2',
+      name: 'Mike Rodriguez',
+      email: 'mike@company.com'
+    },
+    sprint: 'Sprint 3',
+    storyPoints: 8,
+    labels: ['backend', 'security'],
+    dueDate: '2024-02-15',
+    createdAt: '2024-01-10',
+    updatedAt: '2024-01-18'
+  },
+  {
+    id: 'TASK-002',
+    title: 'Design mobile app wireframes',
+    description: 'Create wireframes for the mobile application user interface',
+    status: 'todo',
+    priority: 'medium',
+    assignee: {
+      id: '3',
+      name: 'Alex Thompson',
+      email: 'alex@company.com',
+      avatar: null
+    },
+    reporter: {
+      id: '4',
+      name: 'Emma Davis',
+      email: 'emma@company.com'
+    },
+    sprint: 'Backlog',
+    storyPoints: 5,
+    labels: ['design', 'mobile'],
+    dueDate: '2024-02-20',
+    createdAt: '2024-01-12',
+    updatedAt: '2024-01-15'
+  },
+  {
+    id: 'TASK-003',
+    title: 'Setup CI/CD pipeline',
+    description: 'Configure automated deployment pipeline for the project',
+    status: 'done',
+    priority: 'high',
+    assignee: {
+      id: '5',
+      name: 'David Kim',
+      email: 'david@company.com',
+      avatar: null
+    },
+    reporter: {
+      id: '1',
+      name: 'Sarah Chen',
+      email: 'sarah@company.com'
+    },
+    sprint: 'Sprint 2',
+    storyPoints: 3,
+    labels: ['devops', 'automation'],
+    dueDate: '2024-01-25',
+    createdAt: '2024-01-05',
+    updatedAt: '2024-01-25'
+  },
+  {
+    id: 'TASK-004',
+    title: 'API performance optimization',
+    description: 'Optimize database queries and improve API response times',
+    status: 'in_review',
+    priority: 'medium',
+    assignee: {
+      id: '6',
+      name: 'Lisa Wang',
+      email: 'lisa@company.com',
+      avatar: null
+    },
+    reporter: {
+      id: '2',
+      name: 'Mike Rodriguez',
+      email: 'mike@company.com'
+    },
+    sprint: 'Sprint 3',
+    storyPoints: 6,
+    labels: ['backend', 'performance'],
+    dueDate: '2024-02-10',
+    createdAt: '2024-01-08',
+    updatedAt: '2024-01-17'
+  },
+  {
+    id: 'TASK-005',
+    title: 'User onboarding flow',
+    description: 'Design and implement the user onboarding experience',
+    status: 'todo',
+    priority: 'low',
+    assignee: null,
+    reporter: {
+      id: '3',
+      name: 'Alex Thompson',
+      email: 'alex@company.com'
+    },
+    sprint: 'Backlog',
+    storyPoints: 4,
+    labels: ['frontend', 'ux'],
+    dueDate: null,
+    createdAt: '2024-01-14',
+    updatedAt: '2024-01-14'
+  },
+  {
+    id: 'TASK-006',
+    title: 'Integration testing suite',
+    description: 'Build comprehensive integration tests for all API endpoints',
+    status: 'blocked',
+    priority: 'high',
+    assignee: {
+      id: '7',
+      name: 'Tom Wilson',
+      email: 'tom@company.com',
+      avatar: null
+    },
+    reporter: {
+      id: '5',
+      name: 'David Kim',
+      email: 'david@company.com'
+    },
+    sprint: 'Sprint 3',
+    storyPoints: 7,
+    labels: ['testing', 'backend'],
+    dueDate: '2024-02-12',
+    createdAt: '2024-01-11',
+    updatedAt: '2024-01-16'
+  }
+];
+
+interface TasksPageProps {
+  params: {
+    projectId: string;
+  };
+}
+
+export default function TasksPage({ params }: TasksPageProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [view, setView] = useState<'list' | 'board'>('list');
+  const [sortBy, setSortBy] = useState('updated');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'todo':
+        return <Circle className="h-4 w-4 text-gray-500" />;
+      case 'in_progress':
+        return <Clock className="h-4 w-4 text-blue-500" />;
+      case 'in_review':
+        return <Eye className="h-4 w-4 text-yellow-500" />;
+      case 'done':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case 'blocked':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Circle className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'todo':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'in_review':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'done':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'blocked':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getPriorityBadgeColor = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = !searchQuery || 
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+    const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+    const matchesAssignee = assigneeFilter === 'all' || 
+      (assigneeFilter === 'unassigned' && !task.assignee) ||
+      (task.assignee && task.assignee.id === assigneeFilter);
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
+  });
+
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    let aValue, bValue;
+    
+    switch (sortBy) {
+      case 'title':
+        aValue = a.title.toLowerCase();
+        bValue = b.title.toLowerCase();
+        break;
+      case 'status':
+        aValue = a.status;
+        bValue = b.status;
+        break;
+      case 'priority':
+        const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+        aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
+        bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
+        break;
+      case 'assignee':
+        aValue = a.assignee?.name || 'Unassigned';
+        bValue = b.assignee?.name || 'Unassigned';
+        break;
+      case 'updated':
+      default:
+        aValue = new Date(a.updatedAt).getTime();
+        bValue = new Date(b.updatedAt).getTime();
+        break;
+    }
+    
+    if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const tasksByStatus = {
+    todo: tasks.filter(t => t.status === 'todo'),
+    in_progress: tasks.filter(t => t.status === 'in_progress'),
+    in_review: tasks.filter(t => t.status === 'in_review'),
+    done: tasks.filter(t => t.status === 'done'),
+    blocked: tasks.filter(t => t.status === 'blocked')
+  };
+
+  const uniqueAssignees = Array.from(
+    new Set(tasks.filter(t => t.assignee).map(t => t.assignee!.id))
+  ).map(id => tasks.find(t => t.assignee?.id === id)!.assignee!);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Project Tasks</h1>
+          <p className="text-muted-foreground">
+            Manage and track all project tasks and backlog items
+          </p>
+        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button size="lg" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Create Task
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Task</DialogTitle>
+              <DialogDescription>
+                Add a new task to the project backlog
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                CreateTaskForm component would be integrated here
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">Total Tasks</span>
+              </div>
+              <div className="text-2xl font-bold">{tasks.length}</div>
+              <Progress value={(tasks.filter(t => t.status === 'done').length / tasks.length) * 100} className="h-2" />
+              <div className="text-xs text-muted-foreground">
+                {tasks.filter(t => t.status === 'done').length} completed
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium">In Progress</span>
+              </div>
+              <div className="text-2xl font-bold">{tasksByStatus.in_progress.length}</div>
+              <div className="text-xs text-muted-foreground">
+                {tasksByStatus.in_review.length} in review
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <span className="text-sm font-medium">Blocked</span>
+              </div>
+              <div className="text-2xl font-bold">{tasksByStatus.blocked.length}</div>
+              <div className="text-xs text-muted-foreground">
+                Need attention
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Flag className="h-4 w-4 text-purple-600" />
+                <span className="text-sm font-medium">Story Points</span>
+              </div>
+              <div className="text-2xl font-bold">
+                {tasks.reduce((sum, task) => sum + task.storyPoints, 0)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Total estimated points
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and View Toggle */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:space-x-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Search tasks by title, ID, or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Status: {statusFilter === 'all' ? 'All' : statusFilter.replace('_', ' ')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setStatusFilter('all')}>
+                    All Statuses
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter('todo')}>
+                    To Do
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter('in_progress')}>
+                    In Progress
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter('in_review')}>
+                    In Review
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter('done')}>
+                    Done
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter('blocked')}>
+                    Blocked
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Flag className="h-4 w-4" />
+                    Priority: {priorityFilter === 'all' ? 'All' : priorityFilter}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Filter by Priority</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setPriorityFilter('all')}>
+                    All Priorities
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setPriorityFilter('high')}>
+                    High
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setPriorityFilter('medium')}>
+                    Medium
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setPriorityFilter('low')}>
+                    Low
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <User className="h-4 w-4" />
+                    Assignee
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Filter by Assignee</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setAssigneeFilter('all')}>
+                    All Assignees
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAssigneeFilter('unassigned')}>
+                    Unassigned
+                  </DropdownMenuItem>
+                  {uniqueAssignees.map((assignee) => (
+                    <DropdownMenuItem 
+                      key={assignee.id} 
+                      onClick={() => setAssigneeFilter(assignee.id)}
+                    >
+                      {assignee.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="flex border rounded-md">
+                <Button
+                  variant={view === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setView('list')}
+                  className="rounded-r-none"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={view === 'board' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setView('board')}
+                  className="rounded-l-none"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Content Area */}
+      <Tabs value={view} onValueChange={(value) => setView(value as 'list' | 'board')}>
+        <TabsContent value="list" className="space-y-4">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px]">
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setSortBy('id');
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      ID <ArrowUpDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setSortBy('title');
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      Title <ArrowUpDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setSortBy('status');
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      Status <ArrowUpDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setSortBy('priority');
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      Priority <ArrowUpDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setSortBy('assignee');
+                      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    }}>
+                      Assignee <ArrowUpDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>Sprint</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedTasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell className="font-mono text-sm">{task.id}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{task.title}</div>
+                        <div className="text-sm text-muted-foreground line-clamp-1">
+                          {task.description}
+                        </div>
+                        <div className="flex gap-1">
+                          {task.labels.map((label) => (
+                            <Badge key={label} variant="secondary" className="text-xs">
+                              {label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusBadgeColor(task.status)}>
+                        <span className="flex items-center gap-1">
+                          {getStatusIcon(task.status)}
+                          {task.status.replace('_', ' ')}
+                        </span>
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getPriorityBadgeColor(task.priority)}>
+                        {task.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {task.assignee ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={task.assignee.avatar || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {task.assignee.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm">{task.assignee.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Unassigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {task.sprint}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {task.storyPoints}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {task.dueDate ? (
+                        <div className="text-sm">
+                          {new Date(task.dueDate).toLocaleDateString()}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No due date</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="gap-2">
+                            <Eye className="h-4 w-4" />
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2">
+                            <Edit className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="gap-2 text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="board" className="space-y-4">
+          <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
+            {Object.entries(tasksByStatus).map(([status, statusTasks]) => (
+              <Card key={status} className="h-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      {getStatusIcon(status)}
+                      {status.replace('_', ' ').toUpperCase()}
+                    </span>
+                    <Badge variant="secondary">{statusTasks.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {statusTasks.map((task) => (
+                    <Card key={task.id} className="p-3 hover:shadow-md transition-shadow cursor-pointer">
+                      <div className="space-y-2">
+                        <div className="font-medium text-sm">{task.title}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {task.description}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className={getPriorityBadgeColor(task.priority)}>
+                            {task.priority}
+                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="text-xs">
+                              {task.storyPoints}
+                            </Badge>
+                            {task.assignee && (
+                              <Avatar className="h-5 w-5">
+                                <AvatarImage src={task.assignee.avatar || undefined} />
+                                <AvatarFallback className="text-xs">
+                                  {task.assignee.name.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-wrap">
+                          {task.labels.slice(0, 2).map((label) => (
+                            <Badge key={label} variant="secondary" className="text-xs">
+                              {label}
+                            </Badge>
+                          ))}
+                          {task.labels.length > 2 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{task.labels.length - 2}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {filteredTasks.length === 0 && (
+        <Card className="p-12 text-center">
+          <div className="space-y-3">
+            <div className="mx-auto h-12 w-12 bg-muted rounded-full flex items-center justify-center">
+              <Search className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="font-medium">No tasks found</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Try adjusting your search criteria or filters
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

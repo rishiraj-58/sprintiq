@@ -3,9 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { projects, workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { ProjectDetailClientPage } from './ProjectDetailClientPage';
-import { workspaces } from '@/db/schema';
-import { Navbar } from '@/components/layout/Navbar';
+import { ProjectOverviewPage } from './ProjectOverviewPage';
 
 interface ProjectDetailPageProps {
   params: {
@@ -47,7 +45,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
       notFound();
     }
 
-    return <ProjectDetailClientPage project={project} />;
+    return <ProjectOverviewPage project={project} />;
 
   } catch (error) {
     console.error('Error fetching project:', error);

@@ -54,7 +54,7 @@ export class PermissionManager {
       return mergeWithRoleDefaults(membership.role, membership.capabilities);
     }
 
-    // Project context: check project membership only (no workspace fallback)
+    // Project context: check project membership first
     const [pMem] = await db
       .select({ role: projectMembers.role, capabilities: projectMembers.capabilities, projectId: projectMembers.projectId })
       .from(projectMembers)
@@ -67,7 +67,33 @@ export class PermissionManager {
       return mergeWithRoleDefaults(pMem.role, pMem.capabilities);
     }
 
-    // No project membership found → no capabilities in this project
+    // Fallback: if user is not an explicit project member, inherit workspace membership
+    // Resolve the workspaceId from the project, then look up workspace membership
+    const [proj] = await db
+      .select({ workspaceId: projects.workspaceId })
+      .from(projects)
+      .where(eq(projects.id, contextId));
+
+    if (proj?.workspaceId) {
+      const [wMem] = await db
+        .select({ role: workspaceMembers.role, capabilities: workspaceMembers.capabilities })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.profileId, userId),
+            eq(workspaceMembers.workspaceId, proj.workspaceId)
+          )
+        );
+
+      if (wMem) {
+        if (wMem.role === 'owner') {
+          return DEFAULT_CAPABILITY_SETS.OWNER;
+        }
+        return mergeWithRoleDefaults(wMem.role, wMem.capabilities);
+      }
+    }
+
+    // No membership found → no capabilities in this project
     return [];
   }
 }

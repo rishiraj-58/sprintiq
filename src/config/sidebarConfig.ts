@@ -98,44 +98,44 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Overview',
         icon: LayoutDashboard,
-        path: '/projects/:projectId?tab=overview',
-        description: 'Project dashboard and metrics'
+        path: '/projects/:projectId',
+        description: 'Project dashboard with health, metrics, and activity'
       },
       {
         title: 'Tasks',
         icon: CheckSquare,
-        path: '/projects/:projectId?tab=tasks',
-        description: 'Project backlog and task management'
+        path: '/projects/:projectId/tasks',
+        description: 'Complete project backlog and task management'
       },
       {
         title: 'Sprints',
         icon: Flag,
         path: '/projects/:projectId/sprints',
-        description: 'Sprint board and management'
+        description: 'Sprint planning, active boards, and management'
       },
       {
         title: 'Timeline',
         icon: Clock,
-        path: '/projects/:projectId?tab=timeline',
-        description: 'Gantt chart and project roadmap'
-      },
-      {
-        title: 'Team',
-        icon: User,
-        path: '/projects/:projectId?tab=team',
-        description: 'Project team management'
+        path: '/projects/:projectId/timeline',
+        description: 'Gantt charts, milestones, and project roadmap'
       },
       {
         title: 'Reports',
         icon: BarChart3,
         path: '/projects/:projectId/reports',
-        description: 'Project-specific reports'
+        description: 'Performance analytics and insights'
+      },
+      {
+        title: 'Team',
+        icon: User,
+        path: '/projects/:projectId/team',
+        description: 'Project-specific team and role management'
       },
       {
         title: 'Settings',
         icon: Settings,
-        path: '/projects/:projectId?tab=settings',
-        description: 'Project settings and configuration'
+        path: '/projects/:projectId/settings',
+        description: 'Project configuration and management'
       }
     ]
   },
@@ -176,13 +176,13 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Overview',
         icon: LayoutDashboard,
-        path: '/projects/:projectId?tab=overview',
+        path: '/projects/:projectId',
         description: 'Project dashboard with manager insights'
       },
       {
         title: 'Tasks',
         icon: CheckSquare,
-        path: '/projects/:projectId?tab=tasks',
+        path: '/projects/:projectId/tasks',
         description: 'Full project backlog management'
       },
       {
@@ -194,14 +194,8 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Timeline',
         icon: Clock,
-        path: '/projects/:projectId?tab=timeline',
+        path: '/projects/:projectId/timeline',
         description: 'Project timeline and planning'
-      },
-      {
-        title: 'Team',
-        icon: User,
-        path: '/projects/:projectId?tab=team',
-        description: 'Project team management'
       },
       {
         title: 'Reports',
@@ -210,9 +204,15 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Project performance reports'
       },
       {
+        title: 'Team',
+        icon: User,
+        path: '/projects/:projectId/team',
+        description: 'Project team management'
+      },
+      {
         title: 'Settings',
         icon: Settings,
-        path: '/projects/:projectId?tab=settings',
+        path: '/projects/:projectId/settings',
         description: 'Project configuration'
       }
     ]
@@ -242,13 +242,13 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Overview',
         icon: LayoutDashboard,
-        path: '/projects/:projectId?tab=overview',
+        path: '/projects/:projectId',
         description: 'Project overview'
       },
       {
         title: 'Tasks',
         icon: CheckSquare,
-        path: '/projects/:projectId?tab=tasks',
+        path: '/projects/:projectId/tasks',
         description: 'Project tasks with focus on your assignments'
       },
       {
@@ -260,14 +260,8 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Timeline',
         icon: Clock,
-        path: '/projects/:projectId?tab=timeline',
+        path: '/projects/:projectId/timeline',
         description: 'Read-only project timeline'
-      },
-      {
-        title: 'Team',
-        icon: User,
-        path: '/projects/:projectId?tab=team',
-        description: 'Project team members'
       },
       {
         title: 'Reports',
@@ -290,13 +284,13 @@ export const sidebarConfig: SidebarConfig = {
       {
         title: 'Overview',
         icon: LayoutDashboard,
-        path: '/projects/:projectId?tab=overview',
+        path: '/projects/:projectId',
         description: 'Read-only project dashboard'
       },
       {
         title: 'Timeline',
         icon: Clock,
-        path: '/projects/:projectId?tab=timeline',
+        path: '/projects/:projectId/timeline',
         description: 'Read-only timeline view'
       },
       {

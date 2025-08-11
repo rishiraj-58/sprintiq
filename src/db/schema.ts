@@ -71,6 +71,10 @@ export type Project = typeof projects.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type TaskAttachment = typeof taskAttachments.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type TaskSubtask = typeof taskSubtasks.$inferSelect;
+export type TaskLink = typeof taskLinks.$inferSelect;
+export type TaskLabel = typeof taskLabels.$inferSelect;
+export type TaskAuditLog = typeof taskAuditLogs.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {
@@ -243,3 +247,42 @@ export const taskAttachments = pgTable('task_attachments', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 }); 
+
+// Task Subtasks
+export const taskSubtasks = pgTable('task_subtasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  assigneeId: varchar('assignee_id', { length: 255 }).references(() => profiles.id),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Task Links
+export const taskLinks = pgTable('task_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  linkedTaskId: uuid('linked_task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  relation: varchar('relation', { length: 30 }).notNull(), // blocks | is_blocked_by | related
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Task Labels (simple free-form labels)
+export const taskLabels = pgTable('task_labels', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  label: varchar('label', { length: 64 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Task Audit Logs
+export const taskAuditLogs = pgTable('task_audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  actorId: varchar('actor_id', { length: 255 }).notNull().references(() => profiles.id),
+  action: varchar('action', { length: 64 }).notNull(),
+  details: text('details'), // optional JSON string describing change
+  createdAt: timestamp('created_at').defaultNow(),
+});

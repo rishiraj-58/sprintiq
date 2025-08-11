@@ -13,13 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Calendar, Clock, User, ArrowLeft, Edit, Save, X } from 'lucide-react';
+import { Calendar, Clock, User, ArrowLeft, Edit, Save, X, Plus } from 'lucide-react';
 import { useTask } from '@/stores/hooks/useTask';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/use-toast';
 import { CommentSection } from '@/components/tasks/CommentSection';
 import { TaskAttachmentUploader } from '@/components/tasks/TaskAttachmentUploader';
+import { SubTasks } from '@/components/tasks/SubTasks';
+import { LinkedTasks } from '@/components/tasks/LinkedTasks';
+import { History } from '@/components/tasks/History';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import dynamic from 'next/dynamic';
 
 interface TaskDetailData {
   id: string;
@@ -70,15 +76,14 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const canDelete = ws.canDelete || proj.canDelete;
   const isPermissionsLoading = ws.isLoading || proj.isLoading;
 
-  // Edit state
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(task.title);
-  const [editDescription, setEditDescription] = useState(task.description || '');
-  const [editStatus, setEditStatus] = useState(task.status);
-  const [editPriority, setEditPriority] = useState(task.priority);
-  const [editType, setEditType] = useState(task.type || 'feature');
-  const [editStoryPoints, setEditStoryPoints] = useState<string>(task.storyPoints ? String(task.storyPoints) : '');
-  const [editAssigneeId, setEditAssigneeId] = useState(task.assignee?.id || 'unassigned');
+  // Inline edit state
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description || '');
+  const [status, setStatus] = useState(task.status);
+  const [priority, setPriority] = useState(task.priority);
+  const [type, setType] = useState(task.type || 'feature');
+  const [storyPoints, setStoryPoints] = useState<string>(task.storyPoints ? String(task.storyPoints) : '');
+  const [assigneeId, setAssigneeId] = useState(task.assignee?.id || 'unassigned');
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch workspace members when component mounts
@@ -128,7 +133,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   };
 
   const handleSave = async () => {
-    if (!editTitle.trim()) {
+    if (!title.trim()) {
       toast({
         title: 'Error',
         description: 'Task title is required',
@@ -140,21 +145,19 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
     setIsSaving(true);
     try {
       await updateTask(task.id, {
-        title: editTitle.trim(),
-        description: editDescription.trim() || undefined,
-        status: editStatus,
-        priority: editPriority,
-        type: editType,
-        storyPoints: editStoryPoints ? Number(editStoryPoints) : undefined,
-        assigneeId: editAssigneeId === 'unassigned' ? undefined : editAssigneeId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        priority,
+        type,
+        storyPoints: storyPoints ? Number(storyPoints) : undefined,
+        assigneeId: assigneeId === 'unassigned' ? undefined : assigneeId,
       });
 
       toast({
         title: 'Success',
         description: 'Task updated successfully',
       });
-
-      setIsEditing(false);
       // Refresh the page to show updated data
       router.refresh();
     } catch (error) {
@@ -168,19 +171,13 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
     }
   };
 
-  const handleCancel = () => {
-    setEditTitle(task.title);
-    setEditDescription(task.description || '');
-    setEditStatus(task.status);
-    setEditPriority(task.priority);
-    setEditType(task.type || 'feature');
-    setEditStoryPoints(task.storyPoints ? String(task.storyPoints) : '');
-    setEditAssigneeId(task.assignee?.id || 'unassigned');
-    setIsEditing(false);
+  const handleInlineBlur = () => {
+    // Auto-save title/description edits on blur
+    handleSave();
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -188,246 +185,148 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{isEditing ? 'Edit Task' : 'Task Details'}</h1>
-            <p className="text-muted-foreground">
-              Project: <Link href={`/projects/${task.project.id}`} className="hover:underline text-primary">
-                {task.project.name}
-              </Link>
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              Project: <Link href={`/projects/${task.project.id}`} className="hover:underline text-primary">{task.project.name}</Link>
+              <span className="mx-2">•</span>
+              <span className="font-mono text-xs">{task.id.slice(0, 8).toUpperCase()}</span>
             </p>
+            <input
+              className="w-full bg-transparent text-3xl font-bold outline-none focus:ring-0"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleInlineBlur}
+              disabled={!canEdit || isSaving}
+            />
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
-                <X className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSave} disabled={isSaving || !editTitle.trim()}>
-                <Save className="h-4 w-4 mr-2" />
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </>
-          ) : (
-            <Button 
-              size="sm" 
-              onClick={() => setIsEditing(true)} 
-              disabled={isPermissionsLoading || !canEdit}
-            >
-              {isPermissionsLoading ? (
-                <>
-                  <Spinner size="sm" className="mr-2" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </>
-              )}
-            </Button>
-          )}
+          <Button size="sm" onClick={handleSave} disabled={isSaving || !title.trim()}>
+            {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save
+          </Button>
         </div>
       </div>
 
+      {/* Top two-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
+        {/* Left: main content (70%) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Task Information */}
+          {/* Description */}
           <Card>
             <CardHeader>
-              <CardTitle>Task Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Title */}
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                {isEditing ? (
-                  <Input
-                    id="title"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    disabled={isSaving}
-                  />
-                ) : (
-                  <p className="text-lg font-medium">{task.title}</p>
-                )}
-              </div>
-
-              {/* Description */}
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                {isEditing ? (
-                  <Textarea
-                    id="description"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    disabled={isSaving}
-                    rows={4}
-                  />
-                ) : (
-                  <p className="text-muted-foreground whitespace-pre-wrap">
-                    {task.description || 'No description provided.'}
-                  </p>
-                )}
-              </div>
-
-              {/* Status and Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  {isEditing ? (
-                    <Select value={editStatus} onValueChange={setEditStatus} disabled={isSaving}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todo">To Do</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge variant={getStatusColor(task.status)}>
-                      {getStatusLabel(task.status)}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  {isEditing ? (
-                    <Select value={editPriority} onValueChange={setEditPriority} disabled={isSaving}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge variant={getPriorityColor(task.priority)}>
-                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  {isEditing ? (
-                    <Select value={editType} onValueChange={setEditType} disabled={isSaving}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="feature">Feature</SelectItem>
-                        <SelectItem value="bug">Bug</SelectItem>
-                        <SelectItem value="chore">Chore</SelectItem>
-                        <SelectItem value="improvement">Improvement</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge>
-                      {task.type ? task.type.charAt(0).toUpperCase() + task.type.slice(1) : 'Feature'}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="storyPoints">Story Points</Label>
-                  {isEditing ? (
-                    <Input
-                      id="storyPoints"
-                      type="number"
-                      min={0}
-                      value={editStoryPoints}
-                      onChange={(e) => setEditStoryPoints(e.target.value)}
-                      disabled={isSaving}
-                    />
-                  ) : (
-                    <p className="text-sm">{task.storyPoints ?? '—'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Assignee */}
-              <div className="space-y-2">
-                <Label htmlFor="assignee">Assignee</Label>
-                {isEditing ? (
-                  <Select value={editAssigneeId} onValueChange={setEditAssigneeId} disabled={isSaving || isMembersLoading}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={isMembersLoading ? "Loading members..." : "Select assignee (optional)"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {workspaceMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-5 h-5">
-                              <AvatarImage src={member.avatarUrl || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {member.firstName?.[0]}{member.lastName?.[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span>{member.firstName} {member.lastName}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : task.assignee ? (
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={task.assignee.avatarUrl || undefined} />
-                      <AvatarFallback>
-                        {task.assignee.firstName?.[0]}{task.assignee.lastName?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{task.assignee.firstName} {task.assignee.lastName}</p>
-                      <p className="text-sm text-muted-foreground">{task.assignee.email}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">Unassigned</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Creator */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Created By</CardTitle>
+              <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              {task.creator ? (
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={task.creator.avatarUrl || undefined} />
-                    <AvatarFallback>
-                      {task.creator.firstName?.[0]}{task.creator.lastName?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{task.creator.firstName} {task.creator.lastName}</p>
-                    <p className="text-sm text-muted-foreground">{task.creator.email}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Unknown</p>
-              )}
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={handleInlineBlur}
+                placeholder="Add a rich description..."
+                className="min-h-[140px]"
+                disabled={!canEdit || isSaving}
+              />
             </CardContent>
           </Card>
 
-          {/* Timestamps */}
+          {/* Subtasks */}
+          <SubTasks taskId={task.id} workspaceId={task.workspaceId} />
+
+          {/* Linked Tasks */}
+          <LinkedTasks taskId={task.id} projectId={task.project.id} workspaceId={task.workspaceId} />
+        </div>
+
+        {/* Right: metadata panel (30%) */}
+        <div className="space-y-6">
+          {/* Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={status} onValueChange={setStatus} disabled={!canEdit || isSaving}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todo">To Do</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {/* Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Priority */}
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={priority} onValueChange={setPriority} disabled={!canEdit || isSaving}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Assignees */}
+              <div className="space-y-2">
+                <Label>Assignee</Label>
+                <Select value={assigneeId} onValueChange={setAssigneeId} disabled={!canEdit || isSaving || isMembersLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={isMembersLoading ? 'Loading...' : 'Select assignee'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {workspaceMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-5 h-5">
+                            <AvatarImage src={member.avatarUrl || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {member.firstName?.[0]}{member.lastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{member.firstName} {member.lastName}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Story Points */}
+              <div className="space-y-2">
+                <Label>Story Points</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={storyPoints}
+                  onChange={(e) => setStoryPoints(e.target.value)}
+                  onBlur={handleInlineBlur}
+                  disabled={!canEdit || isSaving}
+                />
+              </div>
+
+              {/* Labels */}
+              <div className="space-y-2">
+                <Label>Labels</Label>
+                <Input placeholder="Add labels (comma separated)" disabled />
+                <p className="text-xs text-muted-foreground">Labels UI coming next.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Timeline */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Timeline</CardTitle>
@@ -438,7 +337,6 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                 <span className="text-muted-foreground">Created:</span>
                 <span>{task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Unknown'}</span>
               </div>
-              
               {task.updatedAt && task.updatedAt !== task.createdAt && (
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="h-4 w-4 text-muted-foreground" />
@@ -446,33 +344,33 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                   <span>{new Date(task.updatedAt).toLocaleDateString()}</span>
                 </div>
               )}
-
-              {task.dueDate && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Due:</span>
-                  <span>{new Date(task.dueDate).toLocaleDateString()}</span>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input type="date" disabled />
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Attachments Section */}
+      {/* Bottom: activity tabs full width */}
       <div className="mt-8">
-        <TaskAttachmentUploader 
-          taskId={task.id} 
-          workspaceId={task.workspaceId}
-        />
-      </div>
-
-      {/* Comments Section */}
-      <div className="mt-8">
-        <CommentSection 
-          taskId={task.id} 
-          workspaceId={task.workspaceId}
-        />
+        <Tabs defaultValue="comments">
+          <TabsList>
+            <TabsTrigger value="comments">Comments</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="attachments">Attachments</TabsTrigger>
+          </TabsList>
+          <TabsContent value="comments" className="mt-4">
+            <CommentSection taskId={task.id} workspaceId={task.workspaceId} />
+          </TabsContent>
+          <TabsContent value="history" className="mt-4">
+            <History taskId={task.id} />
+          </TabsContent>
+          <TabsContent value="attachments" className="mt-4">
+            <TaskAttachmentUploader taskId={task.id} workspaceId={task.workspaceId} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

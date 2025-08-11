@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { tasks, projects, workspaceMembers, profiles } from '@/db/schema';
+import { tasks, projects, workspaceMembers, profiles, taskAuditLogs } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { PermissionManager } from '@/lib/permissions';
@@ -159,6 +159,14 @@ export async function PATCH(
       })
       .where(eq(tasks.id, taskId))
       .returning();
+
+    // Log audit
+    await db.insert(taskAuditLogs).values({
+      taskId,
+      actorId: profile.id,
+      action: 'task_updated',
+      details: JSON.stringify(updates),
+    });
 
     return NextResponse.json(updatedTask);
 

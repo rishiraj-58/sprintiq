@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +51,9 @@ import {
   Trash2,
   Circle
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import MemberTasksPage from './MemberTasksPage';
+import { useProject } from '@/stores/hooks/useProject';
 
 // Static task data
 const tasks = [
@@ -202,6 +205,12 @@ interface TasksPageProps {
 }
 
 export default function TasksPage({ params }: TasksPageProps) {
+  // If user is a member (create/edit but no manage perms), render the member-only page
+  const p = usePermissions('project', params.projectId);
+  const { currentProject } = useProject();
+  const w = usePermissions('workspace', currentProject?.workspaceId);
+  const isMember = (p.canCreate || p.canEdit || w.canCreate || w.canEdit) && !(p.canManageMembers || p.canManageSettings || w.canManageMembers || w.canManageSettings);
+  // Do not early-return before hooks below; keep hook order stable across renders
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -316,6 +325,10 @@ export default function TasksPage({ params }: TasksPageProps) {
   const uniqueAssignees = Array.from(
     new Set(tasks.filter(t => t.assignee).map(t => t.assignee!.id))
   ).map(id => tasks.find(t => t.assignee?.id === id)!.assignee!);
+
+  if (isMember) {
+    return <MemberTasksPage projectId={params.projectId} />;
+  }
 
   return (
     <div className="space-y-6">

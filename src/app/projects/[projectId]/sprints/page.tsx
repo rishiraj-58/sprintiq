@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -164,6 +165,8 @@ const mockBacklogTasks: Task[] = [
 export default function ProjectSprintsPage() {
   const params = useParams();
   const projectId = params?.projectId as string;
+  const p = usePermissions('project', projectId);
+  const isMember = (p.canCreate || p.canEdit) && !(p.canManageMembers || p.canManageSettings);
   
   const [isCompleteSprintDialogOpen, setIsCompleteSprintDialogOpen] = useState(false);
   const [isCreateSprintDialogOpen, setIsCreateSprintDialogOpen] = useState(false);
@@ -206,6 +209,40 @@ export default function ProjectSprintsPage() {
       year: 'numeric'
     });
   };
+
+  // Member view: single-page active sprint board (no tabs, no admin buttons)
+  if (isMember) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-xl">{mockActiveSprint.name}</CardTitle>
+                <Badge variant="secondary" className="bg-green-50 text-green-700">Active</Badge>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  <span>{formatDate(mockActiveSprint.startDate)} - {formatDate(mockActiveSprint.endDate)}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  <span>{mockActiveSprint.completedPoints} / {mockActiveSprint.totalPoints} points</span>
+                </div>
+              </div>
+              {mockActiveSprint.goal && (
+                <p className="text-sm text-muted-foreground max-w-2xl">
+                  <strong>Goal:</strong> {mockActiveSprint.goal}
+                </p>
+              )}
+            </div>
+          </CardHeader>
+        </Card>
+        <KanbanBoard projectId={projectId} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -287,11 +324,7 @@ export default function ProjectSprintsPage() {
                         </p>
                       )}
                     </div>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsCompleteSprintDialogOpen(true)}
-                      className="gap-2"
-                    >
+                    <Button variant="outline" onClick={() => setIsCompleteSprintDialogOpen(true)} className="gap-2">
                       <Pause className="h-4 w-4" />
                       Complete Sprint
                     </Button>

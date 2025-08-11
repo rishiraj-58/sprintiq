@@ -8,6 +8,7 @@ import { RecentActivityFeed } from '@/components/widgets/RecentActivityFeed';
 import { MyAssignedTasks } from '@/components/widgets/MyAssignedTasks';
 import { usePermissions } from '@/hooks/usePermissions';
 import { MyProjectTasksWidget } from '@/components/widgets/MyProjectTasksWidget';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Project {
   id: string;
@@ -136,7 +137,6 @@ export function ProjectOverviewPage({ project }: ProjectOverviewPageProps) {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="space-y-4">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -154,37 +154,50 @@ export function ProjectOverviewPage({ project }: ProjectOverviewPageProps) {
         </div>
       </div>
 
-      {/* Main Dashboard Grid */}
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Main Column - Burndown Chart and Activity */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Burndown Chart */}
-          <CurrentSprintBurndownChart
-            sprintName={mockActiveSprint.name}
-            startDate={mockActiveSprint.startDate}
-            endDate={mockActiveSprint.endDate}
-            tasks={mockTasks}
-          />
+      {/* Member daily stand-up dashboard layout */}
+      {isMemberRole ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left (wider) column */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Sprint Goal</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <blockquote className="border-l-4 pl-4 text-lg text-muted-foreground">
+                  {mockActiveSprint.goal}
+                </blockquote>
+              </CardContent>
+            </Card>
 
-          {/* Recent Activity Feed */}
-          <RecentActivityFeed activities={[]} />
-        </div>
+            <CurrentSprintBurndownChart
+              sprintName={mockActiveSprint.name}
+              startDate={mockActiveSprint.startDate}
+              endDate={mockActiveSprint.endDate}
+              tasks={mockTasks}
+            />
+          </div>
 
-        {/* Sidebar Column - Metrics and Sprint Info */}
-        <div className="space-y-6">
-          {/* Sprint Goal Widget */}
-          <SprintGoalWidget activeSprint={mockActiveSprint} />
-
-          {/* Key Metrics */}
-          <KeyMetrics 
-            activeSprint={mockActiveSprint}
-            tasks={mockTasks}
-          />
-
-          {/* Member-specific compact widget */}
-          {isMemberRole ? (
+          {/* Right (narrow) column */}
+          <div className="space-y-6">
             <MyProjectTasksWidget projectId={project.id} />
-          ) : (
+          </div>
+        </div>
+      ) : (
+        // Managers/Owners unchanged existing dashboard
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-8">
+            <CurrentSprintBurndownChart
+              sprintName={mockActiveSprint.name}
+              startDate={mockActiveSprint.startDate}
+              endDate={mockActiveSprint.endDate}
+              tasks={mockTasks}
+            />
+            <RecentActivityFeed activities={[]} />
+          </div>
+          <div className="space-y-6">
+            <SprintGoalWidget activeSprint={mockActiveSprint} />
+            <KeyMetrics activeSprint={mockActiveSprint} tasks={mockTasks} />
             <MyAssignedTasks 
               tasks={mockTasks.map(task => ({
                 ...task,
@@ -193,9 +206,9 @@ export function ProjectOverviewPage({ project }: ProjectOverviewPageProps) {
                 dueDate: task.status === 'to-do' ? '2024-01-20' : undefined
               }))}
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { db } from '@/db';
 import { projects, workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { ProjectOverviewPage } from './ProjectOverviewPage';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MyProjectTasksWidget } from '@/components/widgets/MyProjectTasksWidget';
 
 interface ProjectDetailPageProps {
   params: {

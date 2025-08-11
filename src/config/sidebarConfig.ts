@@ -264,10 +264,10 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Read-only project timeline'
       },
       {
-        title: 'Reports',
-        icon: BarChart3,
-        path: '/projects/:projectId/reports',
-        description: 'Your contributions to the project'
+        title: 'Team',
+        icon: User,
+        path: '/projects/:projectId/team',
+        description: 'View project team'
       }
     ]
   },

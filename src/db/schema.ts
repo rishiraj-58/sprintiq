@@ -75,6 +75,7 @@ export type TaskSubtask = typeof taskSubtasks.$inferSelect;
 export type TaskLink = typeof taskLinks.$inferSelect;
 export type TaskLabel = typeof taskLabels.$inferSelect;
 export type TaskAuditLog = typeof taskAuditLogs.$inferSelect;
+export type TaskHistory = typeof taskHistory.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {
@@ -284,5 +285,16 @@ export const taskAuditLogs = pgTable('task_audit_logs', {
   actorId: varchar('actor_id', { length: 255 }).notNull().references(() => profiles.id),
   action: varchar('action', { length: 64 }).notNull(),
   details: text('details'), // optional JSON string describing change
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Task History (per-field change logs)
+export const taskHistory = pgTable('task_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => profiles.id),
+  field: varchar('field', { length: 64 }).notNull(),
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
   createdAt: timestamp('created_at').defaultNow(),
 });

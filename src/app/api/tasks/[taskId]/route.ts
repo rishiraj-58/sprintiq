@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { tasks, projects, workspaceMembers, profiles, taskAuditLogs } from '@/db/schema';
+import { tasks, projects, workspaceMembers, profiles, taskAuditLogs, taskHistory } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { PermissionManager } from '@/lib/permissions';
@@ -112,6 +112,14 @@ export async function PATCH(
         projectId: tasks.projectId,
         workspaceId: projects.workspaceId,
         type: tasks.type,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        priority: tasks.priority,
+        assigneeId: tasks.assigneeId,
+        sprintId: tasks.sprintId,
+        dueDate: tasks.dueDate,
+        storyPoints: tasks.storyPoints,
       })
       .from(tasks)
       .innerJoin(projects, eq(tasks.projectId, projects.id))
@@ -142,19 +150,26 @@ export async function PATCH(
       return new NextResponse('Forbidden: You do not have permission to edit tasks', { status: 403 });
     }
 
+    // If assigning a user and task is currently todo, auto-move to in_progress unless status explicitly provided
+    const computedUpdates: Record<string, any> = { ...updates };
+    const assigningSomeone = Object.prototype.hasOwnProperty.call(updates, 'assigneeId') && (updates.assigneeId ?? null) !== null;
+    if (assigningSomeone && task.status === 'todo' && !Object.prototype.hasOwnProperty.call(updates, 'status')) {
+      computedUpdates.status = 'in_progress';
+    }
+
     // Update the task
     const [updatedTask] = await db
       .update(tasks)
       .set({
-        ...(updates.title ? { title: updates.title } : {}),
-        ...(updates.description !== undefined ? { description: updates.description } : {}),
-        ...(updates.status ? { status: updates.status } : {}),
-        ...(updates.priority ? { priority: updates.priority } : {}),
-        ...(updates.type ? { type: updates.type } : {}),
-        ...(updates.assigneeId !== undefined ? { assigneeId: updates.assigneeId || null } : {}),
-        ...(updates.sprintId !== undefined ? { sprintId: updates.sprintId || null } : {}),
-        ...(updates.dueDate !== undefined ? { dueDate: updates.dueDate ? new Date(updates.dueDate) : null } : {}),
-        ...(updates.storyPoints !== undefined ? { storyPoints: typeof updates.storyPoints === 'number' ? updates.storyPoints : null } : {}),
+        ...(computedUpdates.title ? { title: computedUpdates.title } : {}),
+        ...(computedUpdates.description !== undefined ? { description: computedUpdates.description } : {}),
+        ...(computedUpdates.status ? { status: computedUpdates.status } : {}),
+        ...(computedUpdates.priority ? { priority: computedUpdates.priority } : {}),
+        ...(computedUpdates.type ? { type: computedUpdates.type } : {}),
+        ...(computedUpdates.assigneeId !== undefined ? { assigneeId: computedUpdates.assigneeId || null } : {}),
+        ...(computedUpdates.sprintId !== undefined ? { sprintId: computedUpdates.sprintId || null } : {}),
+        ...(computedUpdates.dueDate !== undefined ? { dueDate: computedUpdates.dueDate ? new Date(computedUpdates.dueDate) : null } : {}),
+        ...(computedUpdates.storyPoints !== undefined ? { storyPoints: typeof computedUpdates.storyPoints === 'number' ? computedUpdates.storyPoints : null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId))
@@ -165,8 +180,45 @@ export async function PATCH(
       taskId,
       actorId: profile.id,
       action: 'task_updated',
-      details: JSON.stringify(updates),
+      details: JSON.stringify(computedUpdates),
     });
+
+    // Log per-field history entries
+    const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
+    const fields: Array<{ key: keyof typeof task; name: string; newVal: any }> = [
+      { key: 'title', name: 'title', newVal: updatedTask.title },
+      { key: 'description', name: 'description', newVal: updatedTask.description },
+      { key: 'status', name: 'status', newVal: updatedTask.status },
+      { key: 'priority', name: 'priority', newVal: updatedTask.priority },
+      { key: 'type', name: 'type', newVal: updatedTask.type },
+      { key: 'assigneeId', name: 'assignee', newVal: updatedTask.assigneeId },
+      { key: 'sprintId', name: 'sprint', newVal: updatedTask.sprintId },
+      { key: 'dueDate', name: 'dueDate', newVal: updatedTask.dueDate },
+      { key: 'storyPoints', name: 'storyPoints', newVal: updatedTask.storyPoints },
+    ];
+    for (const f of fields) {
+      // Only record if provided in updates payload (to avoid noisy null comparisons)
+      if (Object.prototype.hasOwnProperty.call(computedUpdates, f.key)) {
+        const oldVal = (task as any)[f.key];
+        const newVal = f.newVal;
+        const toStr = (v: any) => v === null || v === undefined ? '' : (v instanceof Date ? v.toISOString() : String(v));
+        if (toStr(oldVal) !== toStr(newVal)) {
+          changes.push({ field: f.name, oldValue: oldVal, newValue: newVal });
+        }
+      }
+    }
+
+    if (changes.length > 0) {
+      await db.insert(taskHistory).values(
+        changes.map((c) => ({
+          taskId,
+          userId: profile.id,
+          field: c.field,
+          oldValue: c.oldValue === null || c.oldValue === undefined ? null : typeof c.oldValue === 'string' ? c.oldValue : c.oldValue instanceof Date ? c.oldValue.toISOString() : String(c.oldValue),
+          newValue: c.newValue === null || c.newValue === undefined ? null : typeof c.newValue === 'string' ? c.newValue : c.newValue instanceof Date ? c.newValue.toISOString() : String(c.newValue),
+        }))
+      );
+    }
 
     return NextResponse.json(updatedTask);
 

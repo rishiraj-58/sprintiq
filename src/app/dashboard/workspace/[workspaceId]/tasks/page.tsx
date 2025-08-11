@@ -3,7 +3,7 @@ import { getCurrentUserProfile } from '@/lib/auth';
 import { db } from '@/db';
 import { workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
-import { WorkspaceTasksClient } from './tasksClient';
+import TasksClientPage from './TasksClientPage';
 
 interface PageProps {
   params: { workspaceId: string };
@@ -20,7 +20,7 @@ export default async function WorkspaceTasksPage({ params }: PageProps) {
     .where(and(eq(workspaceMembers.profileId, profile.id), eq(workspaceMembers.workspaceId, workspaceId)));
   if (!m) redirect('/workspaces');
 
-  return <WorkspaceTasksClient workspaceId={workspaceId} />;
+  return <TasksClientPage workspaceId={workspaceId} />;
 }
 
 

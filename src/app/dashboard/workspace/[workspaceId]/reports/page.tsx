@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
+import PersonalReportsPage from './PersonalReportsPage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -114,7 +116,8 @@ const reportData = {
   ]
 };
 
-export default function ReportsPage() {
+function AdminReportsView() {
+  // Admin/manager reports original content
   const [timeRange, setTimeRange] = useState('last_30_days');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -525,4 +528,11 @@ export default function ReportsPage() {
       </div>
     </div>
   );
+}
+
+export default function ReportsPage() {
+  const lastWorkspaceId = (typeof window !== 'undefined' && localStorage.getItem('siq:lastWorkspaceId')) || undefined;
+  const perms = usePermissions('workspace', lastWorkspaceId || undefined);
+  const isMember = (perms.canCreate || perms.canEdit) && !(perms.canManageMembers || perms.canManageSettings);
+  return isMember ? <PersonalReportsPage /> : <AdminReportsView />;
 }

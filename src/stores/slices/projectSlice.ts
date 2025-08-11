@@ -37,8 +37,25 @@ export const createProjectSlice: StateCreator<ProjectState> = (set, get) => ({
     if (!workspaceId) return;
     try {
       set({ isLoading: true, error: null });
-      // Fetch from the API route, passing workspaceId as a query param
-      const response = await fetch(`/api/projects?workspaceId=${workspaceId}`);
+      // Determine if we should filter by assigned projects for member role
+      const role = (() => {
+        // Lightweight role resolution based on capabilities stored elsewhere could be added; default no filter
+        try {
+          const capsRaw = localStorage.getItem('siq:lastCaps');
+          if (capsRaw) {
+            const caps = JSON.parse(capsRaw) as string[];
+            const has = (c: string) => caps.includes(c);
+            if (!has('manage_members') && (has('create') || has('edit'))) {
+              return 'member';
+            }
+          }
+        } catch {}
+        return null;
+      })();
+
+      const query = new URLSearchParams({ workspaceId });
+      if (role === 'member') query.set('assignedToMe', 'true');
+      const response = await fetch(`/api/projects?${query.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch projects');
       }

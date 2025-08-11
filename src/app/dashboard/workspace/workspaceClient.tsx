@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Filter, Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface WorkspaceDashboardClientProps {
   workspace: { id: string; name: string; description: string | null } | null;
@@ -84,6 +85,8 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
   const { projects, fetchProjects, isLoading } = useProject();
   const [query, setQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('all');
+  const { canManageMembers, canManageSettings } = usePermissions('workspace', workspace?.id);
+  const canCreateProject = Boolean(canManageMembers || canManageSettings);
 
   useEffect(() => {
     if (workspace) {
@@ -158,11 +161,13 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
             Manage all workspace projects and track their progress
           </p>
         </div>
-        <Link href={`/projects/new?workspaceId=${workspace.id}`}>
-          <Button size="lg" className="gap-2">
-            <span>Create New Project</span>
-          </Button>
-        </Link>
+        {canCreateProject && (
+          <Link href={`/projects/new?workspaceId=${workspace.id}`}>
+            <Button size="lg" className="gap-2">
+              <span>Create New Project</span>
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Search and filters */}
@@ -306,7 +311,7 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
                       {query ? 'Try adjusting your search or filters' : 'Create your first project to get started'}
                     </p>
                   </div>
-                  {!query && (
+                  {!query && canCreateProject && (
                     <Link href={`/projects/new?workspaceId=${workspace.id}`}>
                       <Button className="mt-4">Create New Project</Button>
                     </Link>

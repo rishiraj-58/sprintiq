@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export default function NewProjectPage() {
   const [description, setDescription] = useState("");
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  const { canManageMembers, canManageSettings } = usePermissions('workspace', currentWorkspace?.id || workspaceId);
+  const canCreateProject = Boolean(canManageMembers || canManageSettings);
 
   useEffect(() => {
     (async () => {
@@ -33,6 +36,10 @@ export default function NewProjectPage() {
 
   const submit = async () => {
     if (!name.trim() || !workspaceId) return;
+    if (!canCreateProject) {
+      alert('You do not have permission to create a project.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/projects', {

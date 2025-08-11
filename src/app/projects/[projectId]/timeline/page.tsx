@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -187,6 +188,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
   const [viewType, setViewType] = useState<'gantt' | 'milestones' | 'releases'>('gantt');
   const [timeRange, setTimeRange] = useState('3_months');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const projectId = params.projectId;
+  const projectPerms = usePermissions('project', projectId);
+  const canEditTimeline = projectPerms.canManageMembers || projectPerms.canManageSettings; // treat member as read-only
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -285,7 +289,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
 
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2" disabled={!canEditTimeline}>
                 <Plus className="h-4 w-4" />
                 Add Milestone
               </Button>
@@ -386,13 +390,13 @@ export default function TimelinePage({ params }: TimelinePageProps) {
               <CardTitle className="flex items-center justify-between">
                 <span>Task Timeline</span>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" disabled={!canEditTimeline}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="text-sm text-muted-foreground">
                     {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </span>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" disabled={!canEditTimeline}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

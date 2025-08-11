@@ -14,9 +14,9 @@ import { CreateProjectForm } from '@/components/projects/CreateProjectForm';
 export function ProjectsClientPage() {
   const { currentWorkspace } = useWorkspace();
   const { projects, isLoading, error, fetchProjects } = useProject();
-  
-  // The hook now gets the workspaceId from the global store
-  const { canCreate, isLoading: isPermissionsLoading } = usePermissions('workspace', currentWorkspace?.id);
+
+  const { canManageMembers, canManageSettings } = usePermissions('workspace', currentWorkspace?.id);
+  const canCreateProject = Boolean(canManageMembers || canManageSettings);
 
 
 
@@ -94,7 +94,7 @@ export function ProjectsClientPage() {
         </div>
         
         {/* Create Project Button */}
-        {canCreate && (
+        {canCreateProject && (
           <CreateProjectForm>
             <Button>Create Project</Button>
           </CreateProjectForm>
@@ -108,9 +108,9 @@ export function ProjectsClientPage() {
         <div className="col-span-full rounded-lg border border-dashed p-8 text-center">
           <h3 className="font-semibold">No projects yet</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            {canCreate ? "Create your first project to get started." : "You have not been assigned to any projects yet."}
+            {canCreateProject ? "Create your first project to get started." : "You have not been assigned to any projects yet."}
           </p>
-          {canCreate && (
+          {canCreateProject && (
             <CreateProjectForm>
               <Button>Create Your First Project</Button>
             </CreateProjectForm>

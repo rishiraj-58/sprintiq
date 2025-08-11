@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import type { Project } from '@/db/schema';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export function SettingsPanel({ project, canEdit, canDelete, onDeleted }: { project: Project; canEdit: boolean; canDelete: boolean; onDeleted: () => void; }) {
+export function SettingsPanel({ project, canEdit, canDelete, onDeleted, isWorkspaceManager }: { project: Project; canEdit: boolean; canDelete: boolean; onDeleted: () => void; isWorkspaceManager?: boolean; }) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? '');
   const [status, setStatus] = useState(project.status);
@@ -74,7 +75,24 @@ export function SettingsPanel({ project, canEdit, canDelete, onDeleted }: { proj
           <CardTitle>Danger zone</CardTitle>
         </CardHeader>
         <CardContent>
-          <Button variant="destructive" onClick={remove} disabled={!canDelete || deleting}>{deleting ? 'Deleting…' : 'Delete project'}</Button>
+          {isWorkspaceManager ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex" tabIndex={0} aria-disabled>
+                    <Button variant="destructive" disabled>
+                      Delete project
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Only a workspace Owner can permanently delete a project.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button variant="destructive" onClick={remove} disabled={!canDelete || deleting}>{deleting ? 'Deleting…' : 'Delete project'}</Button>
+          )}
         </CardContent>
       </Card>
     </div>

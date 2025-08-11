@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -202,6 +203,8 @@ export default function TeamPage({ params }: TeamPageProps) {
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedRole, setSelectedRole] = useState('member');
+  const projectPerms = usePermissions('project', params.projectId);
+  const isMember = projectPerms.canCreate || projectPerms.canEdit ? !(projectPerms.canManageMembers || projectPerms.canManageSettings) : false;
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -306,13 +309,14 @@ export default function TeamPage({ params }: TeamPageProps) {
             Manage team members and their roles for this project
           </p>
         </div>
-        <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add Member
-            </Button>
-          </DialogTrigger>
+        {!isMember && (
+          <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Add Member
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Add Team Member</DialogTitle>
@@ -373,6 +377,7 @@ export default function TeamPage({ params }: TeamPageProps) {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -564,6 +569,7 @@ export default function TeamPage({ params }: TeamPageProps) {
                     </div>
                   </TableCell>
                   <TableCell>
+                    {!isMember && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -599,6 +605,7 @@ export default function TeamPage({ params }: TeamPageProps) {
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -624,22 +631,24 @@ export default function TeamPage({ params }: TeamPageProps) {
       )}
 
       {/* Remove Member Dialog */}
-      <AlertDialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove this member from the project? They will lose access to all project resources and their assigned tasks will become unassigned.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemoveMember} className="bg-destructive text-destructive-foreground">
-              Remove Member
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {!isMember && (
+        <AlertDialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to remove this member from the project? They will lose access to all project resources and their assigned tasks will become unassigned.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRemoveMember} className="bg-destructive text-destructive-foreground">
+                Remove Member
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

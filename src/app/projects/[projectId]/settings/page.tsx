@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +52,8 @@ import {
   Calendar,
   Tag
 } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Static project settings data
 const projectSettings = {
@@ -127,6 +129,25 @@ export default function SettingsPage({ params }: SettingsPageProps) {
   const [newStatusName, setNewStatusName] = useState('');
   const [newStatusColor, setNewStatusColor] = useState('#3B82F6');
   const [selectedCategory, setSelectedCategory] = useState('todo');
+  const { user } = useUser();
+  const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadWorkspaceRole = async () => {
+      try {
+        const res = await fetch(`/api/projects/${params.projectId}/members`, { headers: { 'Cache-Control': 'no-cache' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const my = (data.workspaceMembers || []).find((m: any) => m.id === user?.id);
+        setWorkspaceRole(my?.role ?? null);
+      } catch (e) {
+        // ignore
+      }
+    };
+    if (user?.id && params.projectId) {
+      loadWorkspaceRole();
+    }
+  }, [user?.id, params.projectId]);
 
   const handleSaveGeneral = () => {
     // Save general settings logic
@@ -787,10 +808,28 @@ export default function SettingsPage({ params }: SettingsPageProps) {
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </Button>
+                        {workspaceRole === 'manager' ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex" tabIndex={0} aria-disabled>
+                                  <Button variant="destructive" disabled>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Only a workspace Owner can permanently delete a project.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Button variant="destructive">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </Button>
+                        )}
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>

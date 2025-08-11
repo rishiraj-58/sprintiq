@@ -46,6 +46,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const canDelete = projectPerms.canDelete || workspacePerms.canDelete;
   const canManageMembers = projectPerms.canManageMembers || workspacePerms.canManageMembers;
   const isOwnerLike = projectPerms.canManageSettings || workspacePerms.canManageSettings;
+  const isWorkspaceManager = workspacePerms.canManageMembers && !workspacePerms.canManageSettings;
   const isPermissionsLoading = projectPerms.isLoading || workspacePerms.isLoading;
 
   const [team, setTeam] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
@@ -539,6 +540,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
             project={project}
             canEdit={canEdit}
             canDelete={canDelete}
+            isWorkspaceManager={isWorkspaceManager}
             onDeleted={() => router.push('/projects')}
           />
         </TabsContent>

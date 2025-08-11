@@ -6,6 +6,8 @@ import { KeyMetrics } from '@/components/widgets/KeyMetrics';
 import { SprintGoalWidget } from '@/components/widgets/SprintGoalWidget';
 import { RecentActivityFeed } from '@/components/widgets/RecentActivityFeed';
 import { MyAssignedTasks } from '@/components/widgets/MyAssignedTasks';
+import { usePermissions } from '@/hooks/usePermissions';
+import { MyProjectTasksWidget } from '@/components/widgets/MyProjectTasksWidget';
 
 interface Project {
   id: string;
@@ -120,6 +122,17 @@ const getProjectHealthStatus = (project: Project) => {
 
 export function ProjectOverviewPage({ project }: ProjectOverviewPageProps) {
   const healthStatus = getProjectHealthStatus(project);
+  const workspacePerms = usePermissions('workspace', project.workspaceId);
+  const projectPerms = usePermissions('project', project.id);
+  const isMemberRole = (() => {
+    const caps: string[] = [];
+    if (workspacePerms.canCreate || projectPerms.canCreate) caps.push('create');
+    if (workspacePerms.canEdit || projectPerms.canEdit) caps.push('edit');
+    if (workspacePerms.canManageMembers || projectPerms.canManageMembers) caps.push('manage_members');
+    if (workspacePerms.canManageSettings || projectPerms.canManageSettings) caps.push('manage_settings');
+    // Member: can create/edit but not manage members/settings
+    return caps.includes('create') || caps.includes('edit') ? !(caps.includes('manage_members') || caps.includes('manage_settings')) : false;
+  })();
 
   return (
     <div className="space-y-8">
@@ -168,15 +181,19 @@ export function ProjectOverviewPage({ project }: ProjectOverviewPageProps) {
             tasks={mockTasks}
           />
 
-          {/* My Assigned Tasks */}
-          <MyAssignedTasks 
-            tasks={mockTasks.map(task => ({
-              ...task,
-              priority: 'medium' as const,
-              projectId: project.id,
-              dueDate: task.status === 'to-do' ? '2024-01-20' : undefined
-            }))}
-          />
+          {/* Member-specific compact widget */}
+          {isMemberRole ? (
+            <MyProjectTasksWidget projectId={project.id} />
+          ) : (
+            <MyAssignedTasks 
+              tasks={mockTasks.map(task => ({
+                ...task,
+                priority: 'medium' as const,
+                projectId: project.id,
+                dueDate: task.status === 'to-do' ? '2024-01-20' : undefined
+              }))}
+            />
+          )}
         </div>
       </div>
     </div>

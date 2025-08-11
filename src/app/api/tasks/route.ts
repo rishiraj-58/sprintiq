@@ -82,6 +82,7 @@ export async function GET(request: Request) {
     const priority = searchParams.get('priority');
     const assigneeId = searchParams.get('assigneeId');
     const type = searchParams.get('type');
+    const sprintId = searchParams.get('sprintId');
 
     if (!projectId) {
       return new NextResponse('Project ID is required', { status: 400 });
@@ -138,6 +139,13 @@ export async function GET(request: Request) {
     }
     if (type) {
       filterConditions.push(eq(tasks.type, type));
+    }
+    if (sprintId) {
+      if (sprintId === 'null') {
+        filterConditions.push(eq(tasks.sprintId, null as any));
+      } else {
+        filterConditions.push(eq(tasks.sprintId, sprintId));
+      }
     }
 
     // Fetch all tasks for the project with assignee details

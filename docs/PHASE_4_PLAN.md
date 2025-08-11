@@ -54,13 +54,13 @@ This section covers features and fixes within the scope of a single project.
 
 ### 1.2. Sprints & Timeline
 * **To-Do List:**
-    -   [ ] **UI Fix:** In the Member's view of the Sprints page, add a static title `<h1>Sprint Management</h1>`.
+    -   [x] **UI Fix:** In the Member's view of the Sprints page, add a static title `<h1>Sprint Management</h1>`.
     -   [ ] **Bug Fix:** The "Create Sprint" button is not working.
-        -   [ ] **Backend:** Build the `POST /api/projects/[projectId]/sprints` API endpoint. It should accept a `name`, `goal`, `startDate`, and `endDate` and create a new sprint record.
-        -   [ ] **Frontend:** Wire the "Create Sprint" button and form to this new API endpoint.
+        -   [x] **Backend:** Build the `POST /api/projects/[projectId]/sprints` API endpoint. It should accept a `name`, `goal`, `startDate`, and `endDate` and create a new sprint record.
+        -   [x] **Frontend:** Wire the "Create Sprint" button and form to this new API endpoint.
     -   [ ] **Feature:** Enable dragging backlog tasks into a "Planned Sprint" column.
-        -   [ ] **Frontend:** Implement the drag-and-drop logic (`dnd-kit`).
-        -   [ ] **Backend:** On drop, call an API (`PATCH /api/tasks/[taskId]`) to update the task's `sprintId`.
+        -   [x] **Frontend:** Implement the drag-and-drop logic (`dnd-kit`).
+        -   [x] **Backend:** On drop, call an API (`PATCH /api/tasks/[taskId]`) to update the task's `sprintId`.
     -   [ ] **Feature:** Implement Milestone creation on the Timeline.
         -   [ ] **Schema:** Create a `Milestone` model in `schema.prisma` linked to a project.
         -   [ ] **Backend:** Create full CRUD API endpoints for milestones (`/api/projects/[projectId]/milestones`).

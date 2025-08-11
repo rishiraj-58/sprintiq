@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { projects, sprints, workspaceMembers } from '@/db/schema';
+import { projects, milestones, workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
 
@@ -26,13 +26,12 @@ export async function GET(
     if (!caps.includes('view')) return new NextResponse('Forbidden', { status: 403 });
 
     const rows = await db
-      .select({ id: sprints.id, name: sprints.name, description: sprints.description, status: sprints.status, startDate: sprints.startDate, endDate: sprints.endDate, updatedAt: sprints.updatedAt, createdAt: sprints.createdAt })
-      .from(sprints)
-      .where(eq(sprints.projectId, projectId));
-
+      .select()
+      .from(milestones)
+      .where(eq(milestones.projectId, projectId));
     return NextResponse.json(rows);
   } catch (e) {
-    console.error('GET project sprints error', e);
+    console.error('GET project milestones error', e);
     if (e instanceof Error && e.message.includes('Not authenticated')) return new NextResponse('Unauthorized', { status: 401 });
     return new NextResponse('Internal Server Error', { status: 500 });
   }
@@ -60,24 +59,23 @@ export async function POST(
     if (!caps.includes('create')) return new NextResponse('Forbidden', { status: 403 });
 
     const [row] = await db
-      .insert(sprints)
+      .insert(milestones)
       .values({
-        name: body.name,
-        // Map goal → description for storage compatibility
-        description: body.goal ?? body.description,
         projectId,
-        status: body.status || 'planning',
-        startDate: body.startDate ? new Date(body.startDate) : null,
-        endDate: body.endDate ? new Date(body.endDate) : null,
+        name: body.name,
+        description: body.description,
+        dueDate: body.date ? new Date(body.date) : null,
+        status: body.status || 'planned',
       })
       .returning();
 
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
-    console.error('POST project sprints error', e);
+    console.error('POST project milestones error', e);
     if (e instanceof Error && e.message.includes('Not authenticated')) return new NextResponse('Unauthorized', { status: 401 });
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
+
 
 

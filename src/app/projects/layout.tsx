@@ -2,6 +2,7 @@ import { getCurrentUserProfile } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { DashboardProvider } from '@/app/dashboard/DashboardProvider';
 import { Navbar } from '@/components/layout/Navbar';
+import { SidebarLayout } from '@/components/layout/SidebarLayout';
 
 export default async function ProjectsLayout({
   children,
@@ -22,9 +23,9 @@ export default async function ProjectsLayout({
     <DashboardProvider>
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="p-6">
+        <SidebarLayout>
           {children}
-        </main>
+        </SidebarLayout>
       </div>
     </DashboardProvider>
   );

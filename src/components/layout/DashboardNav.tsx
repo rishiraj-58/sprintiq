@@ -12,6 +12,7 @@ function useWorkspaceScopedNav(workspaceId?: string) {
     { title: 'Projects', href: `${base}`, icon: 'LayoutDashboard' },
     { title: 'Team', href: `/workspaces/${workspaceId}/team`, icon: 'Users' },
     { title: 'Reports', href: `${base}/reports`, icon: 'BarChartBig' },
+    { title: 'Sprint Planner', href: `/dashboard/manager/sprint-planner`, icon: 'CalendarRange' },
     { title: 'Usage', href: `${base}/usage`, icon: 'BarChart' },
     { title: 'Billing', href: `${base}/billing`, icon: 'CreditCard' },
     { title: 'Audit Logs', href: `${base}/audit-logs`, icon: 'FileClock' },
@@ -32,6 +33,7 @@ export function DashboardNav() {
         // Basic gating by capability
         if (item.title === 'Team' && !canManageMembers) return null;
         if ((item.title === 'Organization Settings' || item.title === 'Billing' || item.title === 'Usage' || item.title === 'Audit Logs') && !canManageSettings) return null;
+        if ((item.title === 'Sprint Planner') && !canManageMembers) return null;
         if ((item.title === 'Projects' || item.title === 'Reports' || item.title === 'Integrations') && !canView) return null;
         return (
         <Link

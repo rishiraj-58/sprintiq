@@ -4,6 +4,9 @@ import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Spinner } from '@/components/ui/spinner';
 import { ManagerDashboardClient } from './manager/ManagerDashboardClient';
+import { OwnerDashboardClient } from './owner/OwnerDashboardClient';
+import { MemberDashboardClient } from './member/MemberDashboardClient';
+import { ViewerDashboardClient } from './viewer/ViewerDashboardClient';
 
 function resolveRoleFromCapabilities(capabilities: string[]): 'owner' | 'manager' | 'member' | 'viewer' {
   const has = (c: string) => capabilities.includes(c);
@@ -35,12 +38,10 @@ export function RoleBasedDashboardClient() {
 
   const role = resolveRoleFromCapabilities(caps);
 
-  if (role === 'manager') {
-    return <ManagerDashboardClient />;
-  }
-
-  // Temporary: reuse ManagerDashboard for owner/member/viewer until specific dashboards are added
-  return <ManagerDashboardClient />;
+  if (role === 'owner') return <OwnerDashboardClient />;
+  if (role === 'manager') return <ManagerDashboardClient />;
+  if (role === 'member') return <MemberDashboardClient />;
+  return <ViewerDashboardClient />;
 }
 
 

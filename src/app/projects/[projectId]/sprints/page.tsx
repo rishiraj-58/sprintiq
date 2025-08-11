@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { ProjectSidebar } from '../ProjectSidebar';
+// ProjectSidebar now handled by SidebarLayout
 
 type Sprint = { id: string; name: string; description: string | null; status: string; startDate: string | null; endDate: string | null };
 
@@ -55,16 +55,7 @@ export default function ProjectSprintsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-6">
-        {/* Sidebar */}
-        <aside className="w-56 shrink-0">
-          <div className="sticky top-20">
-            <ProjectSidebar projectId={projectId} active="sprints" />
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <div className="flex-1 space-y-6">
+      {/* Main content - Sidebar handled by SidebarLayout */}
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Sprints</h1>
             <Button onClick={() => setOpen(true)}>New Sprint</Button>
@@ -151,8 +142,6 @@ export default function ProjectSprintsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
     </div>
   );
 }

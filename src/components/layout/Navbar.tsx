@@ -68,8 +68,24 @@ export function Navbar() {
     return list.map((p) => ({ id: p.id, name: p.name }));
   }, [projects, projQuery]);
 
+  // Local dropdown open states
+  const [wsOpen, setWsOpen] = useState(false);
+  const [projOpen, setProjOpen] = useState(false);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      // Close if clicked outside any dropdown containers
+      if (!target.closest('[data-dropdown="ws"]')) setWsOpen(false);
+      if (!target.closest('[data-dropdown="proj"]')) setProjOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
   return (
-    <nav className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="sticky top-0 z-[60] border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center gap-4 px-4">
         {/* Brand + Workspace switcher: "SprintIQ / Workspace" */}
         <div className="hidden md:flex items-center gap-2">
@@ -77,12 +93,18 @@ export function Navbar() {
             <span className="inline-block">SprintIQ</span>
           </Link>
           <span className="text-muted-foreground">/</span>
-          <div className="relative group">
-            <button className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
+          <div className="relative" data-dropdown="ws">
+            <button
+              className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+              onClick={() => setWsOpen((v) => !v)}
+              aria-expanded={wsOpen}
+              aria-haspopup="menu"
+            >
               <span className="font-medium">{currentWorkspace?.name || 'Select workspace'}</span>
               <ChevronsUpDown className="h-4 w-4" />
             </button>
-            <div className="invisible absolute left-0 top-full z-50 mt-1 w-80 rounded border bg-popover p-2 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+            {wsOpen && (
+            <div className="absolute left-0 top-full z-[70] mt-1 w-80 rounded border bg-popover p-2 text-sm shadow-md">
               <div className="flex items-center gap-2 rounded border bg-background px-2 py-1">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -102,6 +124,7 @@ export function Navbar() {
                       localStorage.setItem("siq:lastWorkspaceId", w.id);
                       await fetchProjects(w.id);
                       router.push(`/dashboard/workspace/${w.id}`);
+                      setWsOpen(false);
                     }}
                   >
                     <span className="truncate" title={w.name}>{w.name}</span>
@@ -131,18 +154,25 @@ export function Navbar() {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* Project Switcher inline */}
           {currentWorkspace && (
             <>
               <span className="text-muted-foreground">/</span>
-              <div className="relative group">
-                <button className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
+              <div className="relative" data-dropdown="proj">
+                <button
+                  className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+                  onClick={() => setProjOpen((v) => !v)}
+                  aria-expanded={projOpen}
+                  aria-haspopup="menu"
+                >
                   <span className="font-medium">{(typeof window !== 'undefined' && (projects.find(p => p.id === localStorage.getItem('siq:lastProjectId'))?.name)) || currentProject?.name || 'Select project'}</span>
                   <ChevronsUpDown className="h-4 w-4" />
                 </button>
-                <div className="invisible absolute left-0 top-full z-50 mt-1 w-96 rounded border bg-popover p-2 text-sm opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
+                {projOpen && (
+                <div className="absolute left-0 top-full z-[70] mt-1 w-96 rounded border bg-popover p-2 text-sm shadow-md">
                   <div className="flex items-center gap-2 rounded border bg-background px-2 py-1">
                     <Search className="h-4 w-4 text-muted-foreground" />
                     <Input
@@ -163,6 +193,7 @@ export function Navbar() {
                           if (proj) {
                             localStorage.setItem('siq:lastProjectId', proj.id);
                             router.push(`/projects/${proj.id}`);
+                            setProjOpen(false);
                           }
                         }}
                       >
@@ -184,6 +215,7 @@ export function Navbar() {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             </>
           )}

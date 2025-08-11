@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { type RoleCapability } from '@/types/database';
 
@@ -6,6 +6,9 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
   const { user } = useUser();
   const [capabilities, setCapabilities] = useState<RoleCapability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const lastKeyRef = useRef<string | null>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
+  const cacheRef = useRef<Map<string, RoleCapability[]>>(new Map());
 
   console.log('usePermissions hook - state:', { 
     userId: user?.id, 
@@ -21,16 +24,41 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
     
     const fetchCapabilities = async () => {
       if (user?.id && contextId) {
+        const key = `${user.id}:${contextType}:${contextId}`;
+
+        // If we already fetched for the same key, return cached to avoid spam
+        if (cacheRef.current.has(key)) {
+          setCapabilities(cacheRef.current.get(key) || []);
+          setIsLoading(false);
+          return;
+        }
+
+        // If the same request is in-flight, skip
+        if (lastKeyRef.current === key && inFlightRef.current) {
+          return;
+        }
+
+        lastKeyRef.current = key;
+        inFlightRef.current?.abort();
+        const controller = new AbortController();
+        inFlightRef.current = controller;
+
         console.log('usePermissions: Making API call to /api/permissions');
         setIsLoading(true);
         try {
           // Fetch from the API instead of calling PermissionManager directly
-          const response = await fetch(`/api/permissions?contextId=${contextId}&contextType=${contextType}`);
+          const response = await fetch(`/api/permissions?contextId=${contextId}&contextType=${contextType}`, {
+            signal: controller.signal,
+            // Deduplicate requests at the browser layer
+            headers: { 'Cache-Control': 'no-cache' },
+          });
           console.log('usePermissions: API response status:', response.status);
           if (response.ok) {
             const data = await response.json();
             console.log('usePermissions: Received capabilities:', data.capabilities);
-            setCapabilities(data.capabilities || []);
+            const caps = data.capabilities || [];
+            cacheRef.current.set(key, caps);
+            setCapabilities(caps);
           } else {
             console.log('usePermissions: API failed');
             setCapabilities([]);
@@ -40,6 +68,7 @@ export const usePermissions = (contextType: 'workspace' | 'project', contextId?:
           setCapabilities([]);
         } finally {
           setIsLoading(false);
+          inFlightRef.current = null;
         }
       } else {
         console.log('usePermissions: Not fetching - missing data');

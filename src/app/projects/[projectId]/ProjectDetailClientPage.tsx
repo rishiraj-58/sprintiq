@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, User, Settings, FileText, CheckSquare, Plus, Trash2, Flag } from 'lucide-react';
-import { ProjectSidebar } from './ProjectSidebar';
+// ProjectSidebar now handled by SidebarLayout
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUser } from '@clerk/nextjs';
 import { useToast } from '@/components/ui/use-toast';
@@ -20,6 +20,7 @@ import { AIChatFloating } from '@/components/ai/AIChatFloating';
 import { Timeline } from './Timeline';
 import { SettingsPanel } from './SettingsPanel';
 import { useProject } from '@/stores/hooks/useProject';
+// duplicate import removed
 
 interface ProjectDetailClientPageProps {
   project: Project;
@@ -44,6 +45,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
   const canEdit = projectPerms.canEdit || workspacePerms.canEdit;
   const canDelete = projectPerms.canDelete || workspacePerms.canDelete;
   const canManageMembers = projectPerms.canManageMembers || workspacePerms.canManageMembers;
+  const isOwnerLike = projectPerms.canManageSettings || workspacePerms.canManageSettings;
   const isPermissionsLoading = projectPerms.isLoading || workspacePerms.isLoading;
 
   const [team, setTeam] = useState<Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>>([]);
@@ -137,31 +139,9 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
       {/* Navbar is provided by projects layout */}
       {/* Project header moved into Overview tab */}
 
-      {/* Project Sidebar + Content */}
-      <div className="flex gap-6">
-        <aside className="w-56 shrink-0">
-          <div className="sticky top-20">
-            <ProjectSidebar
-              projectId={project.id}
-              active={activeTab as any}
-              mode="tabs"
-              onSelect={(k) => setActiveTab(k)}
-            />
-            {activeTab === 'tasks' && canCreate && (
-              <div className="mt-4">
-              <CreateTaskForm projectId={project.id}>
-                  <Button className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Task
-                </Button>
-              </CreateTaskForm>
-            </div>
-          )}
-        </div>
-        </aside>
-
-        <div className="flex-1">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {/* Main Content - Sidebar handled by SidebarLayout */}
+      <div className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
             
 
         {/* Overview Tab Content */}
@@ -252,6 +232,28 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
             </Card>
           </div>
 
+          {/* Manager widgets (static data) - managers only */}
+          {(canManageMembers && !isOwnerLike) && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader><CardTitle>Burndown (static)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="h-48 rounded border bg-gradient-to-b from-blue-200/50 to-transparent" />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Workload Heatmap (static)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: 35 }).map((_, i) => (
+                      <div key={i} className={`h-6 rounded ${i % 5 === 0 ? 'bg-red-500/40' : i % 3 === 0 ? 'bg-yellow-500/30' : 'bg-green-500/30'}`} />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Static Charts Row */}
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -318,6 +320,17 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
 
         {/* Tasks Tab Content */}
         <TabsContent value="tasks" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold tracking-tight">Tasks</h2>
+            {canCreate && (
+              <CreateTaskForm projectId={project.id}>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Task
+                </Button>
+              </CreateTaskForm>
+            )}
+          </div>
           <TaskFilters 
             projectId={project.id} 
             workspaceId={project.workspaceId}
@@ -529,8 +542,7 @@ export function ProjectDetailClientPage({ project }: ProjectDetailClientPageProp
             onDeleted={() => router.push('/projects')}
           />
         </TabsContent>
-      </Tabs>
-        </div>
+        </Tabs>
       </div>
 
       {/* Floating AI Assistant */}

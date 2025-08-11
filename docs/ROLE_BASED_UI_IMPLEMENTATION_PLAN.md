@@ -168,9 +168,9 @@ Owner
 - [x] Workspace settings UI: permissions matrix visible
 
 Manager
-- [ ] Sidebar shows Sprints, Team (capacity), Reports
-- [ ] Manager dashboard widgets: burndown, workload heatmap, health tiles
-- [ ] Sprint planner page with capacity hints
+- [x] Sidebar shows Sprints, Team (capacity), Reports
+- [x] Manager dashboard widgets: burndown, workload heatmap, health tiles
+- [x] Sprint planner page with capacity hints
 
 Member
 - [ ] Sidebar shows My Work, Tasks, Backlog (if allowed), Documents

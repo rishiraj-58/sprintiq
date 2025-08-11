@@ -59,12 +59,12 @@ This section covers features and fixes within the scope of a single project.
         -   [x] **Backend:** Build the `POST /api/projects/[projectId]/sprints` API endpoint. It should accept a `name`, `goal`, `startDate`, and `endDate` and create a new sprint record.
         -   [x] **Frontend:** Wire the "Create Sprint" button and form to this new API endpoint.
     -   [ ] **Feature:** Enable dragging backlog tasks into a "Planned Sprint" column.
-        -   [x] **Frontend:** Implement the drag-and-drop logic (`dnd-kit`).
+        -   [ ] **Frontend:** Implement the drag-and-drop logic (`dnd-kit`).
         -   [x] **Backend:** On drop, call an API (`PATCH /api/tasks/[taskId]`) to update the task's `sprintId`.
-    -   [ ] **Feature:** Implement Milestone creation on the Timeline.
-        -   [ ] **Schema:** Create a `Milestone` model in `schema.prisma` linked to a project.
-        -   [ ] **Backend:** Create full CRUD API endpoints for milestones (`/api/projects/[projectId]/milestones`).
-        -   [ ] **Frontend:** Add a "Create Milestone" button to the Timeline page and render milestones on the Gantt chart.
+    -   [x] **Feature:** Implement Milestone creation on the Timeline.
+        -   [x] **Schema:** Create a `Milestone` model in `schema.prisma` linked to a project.
+        -   [x] **Backend:** Create full CRUD API endpoints for milestones (`/api/projects/[projectId]/milestones`).
+        -   [x] **Frontend:** Add a "Create Milestone" button to the Timeline page and render milestones on the Gantt chart.
 
 ### 1.3. Reports & Analytics
 * **Issue:** The report calculations are placeholders. Real logic is needed.

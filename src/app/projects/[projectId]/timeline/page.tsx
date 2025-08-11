@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -191,6 +191,62 @@ export default function TimelinePage({ params }: TimelinePageProps) {
   const projectId = params.projectId;
   const projectPerms = usePermissions('project', projectId);
   const canEditTimeline = projectPerms.canManageMembers || projectPerms.canManageSettings; // treat member as read-only
+  const [milestonesData, setMilestonesData] = useState<any[]>([]);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newMilestoneName, setNewMilestoneName] = useState('');
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editStatus, setEditStatus] = useState<'planned' | 'in_progress' | 'completed'>('planned');
+
+  const loadMilestones = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/milestones`);
+      if (!res.ok) return;
+      setMilestonesData(await res.json());
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadMilestones();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const openEdit = (m: any) => {
+    setEditId(m.id);
+    setEditName(m.name || '');
+    setEditDesc(m.description || '');
+    const d = m.date || m.dueDate;
+    setEditDate(d ? new Date(d).toISOString().slice(0, 10) : '');
+    setEditStatus((m.status as any) || 'planned');
+    setIsEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editId) return;
+    const res = await fetch(`/api/projects/${projectId}/milestones/${editId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editName.trim(), description: editDesc.trim(), date: editDate, status: editStatus }),
+    });
+    if (res.ok) {
+      setIsEditOpen(false);
+      setEditId(null);
+      await loadMilestones();
+    }
+  };
+
+  const deleteMilestone = async (id: string) => {
+    if (!confirm('Delete this milestone?')) return;
+    const res = await fetch(`/api/projects/${projectId}/milestones/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      await loadMilestones();
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -287,7 +343,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Dialog>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2" disabled={!canEditTimeline}>
                 <Plus className="h-4 w-4" />
@@ -301,10 +357,29 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                   Add a new project milestone with target date
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-4">
-                <p className="text-sm text-muted-foreground">
-                  Milestone creation form would be integrated here
-                </p>
+              <div className="py-4 space-y-3">
+                <div>
+                  <input className="w-full border rounded px-2 py-1 text-sm" placeholder="Milestone name" value={newMilestoneName} onChange={(e) => setNewMilestoneName(e.target.value)} />
+                </div>
+                <div>
+                  <textarea className="w-full border rounded px-2 py-1 text-sm" placeholder="Description" rows={3} value={newMilestoneDesc} onChange={(e) => setNewMilestoneDesc(e.target.value)} />
+                </div>
+                <div>
+                  <input type="date" className="w-full border rounded px-2 py-1 text-sm" value={newMilestoneDate} onChange={(e) => setNewMilestoneDate(e.target.value)} />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                  <Button onClick={async () => {
+                    const res = await fetch(`/api/projects/${projectId}/milestones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newMilestoneName.trim(), description: newMilestoneDesc.trim(), date: newMilestoneDate }) });
+                    if (res.ok) {
+                      setIsCreateOpen(false);
+                      setNewMilestoneName('');
+                      setNewMilestoneDesc('');
+                      setNewMilestoneDate('');
+                      loadMilestones();
+                    }
+                  }} disabled={!newMilestoneName.trim() || !newMilestoneDate}>Create</Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -498,7 +573,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
         {/* Milestones View */}
         <TabsContent value="milestones" className="space-y-4">
           <div className="grid gap-6">
-            {timelineData.milestones.map((milestone, index) => (
+            {(milestonesData.length ? milestonesData : timelineData.milestones).map((milestone: any, index: number) => (
               <Card key={milestone.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -515,34 +590,51 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                         <p className="text-sm text-muted-foreground">{milestone.description}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium">
-                        {new Date(milestone.date).toLocaleDateString()}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-sm font-medium">
+                          {new Date(milestone.date || milestone.dueDate).toLocaleDateString()}
+                        </div>
+                        <Badge variant="outline" className={getStatusBadgeColor(milestone.status)}>
+                          {milestone.status.replace('_', ' ')}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className={getStatusBadgeColor(milestone.status)}>
-                        {milestone.status.replace('_', ' ')}
-                      </Badge>
+                      {canEditTimeline && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="h-8 rounded-md px-2 hover:bg-accent" aria-label="Milestone actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="z-[200]">
+                            <DropdownMenuItem onClick={() => openEdit(milestone)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMilestone(milestone.id)}>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="text-sm font-medium">Associated Tasks:</div>
-                    <div className="grid gap-2">
-                      {milestone.tasks.map((task) => (
-                        <div key={task.id} className="flex items-center justify-between p-2 border rounded">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${getStatusColor(task.status)}`} />
-                            <span className="text-sm">{task.id}</span>
-                            <span className="text-sm">{task.title}</span>
+                  {Array.isArray(milestone.tasks) && milestone.tasks.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium">Associated Tasks:</div>
+                      <div className="grid gap-2">
+                        {milestone.tasks.map((task: { id: string; title: string; status: string }) => (
+                          <div key={task.id} className="flex items-center justify-between p-2 border rounded">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${getStatusColor(task.status)}`} />
+                              <span className="text-sm">{task.id}</span>
+                              <span className="text-sm">{task.title}</span>
+                            </div>
+                            <Badge variant="outline" className={getStatusBadgeColor(task.status)}>
+                              {task.status.replace('_', ' ')}
+                            </Badge>
                           </div>
-                          <Badge variant="outline" className={getStatusBadgeColor(task.status)}>
-                            {task.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -592,12 +684,12 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                         </div>
                         <div className="mt-3">
                           <Progress 
-                            value={milestone.tasks.filter(t => t.status === 'done').length / milestone.tasks.length * 100} 
+                            value={milestone.tasks.filter((t: { status: string }) => t.status === 'done').length / milestone.tasks.length * 100} 
                             className="h-2" 
                           />
                           <div className="flex justify-between text-xs text-muted-foreground mt-1">
                             <span>
-                              {milestone.tasks.filter(t => t.status === 'done').length} of {milestone.tasks.length} tasks completed
+                              {milestone.tasks.filter((t: { status: string }) => t.status === 'done').length} of {milestone.tasks.length} tasks completed
                             </span>
                             <span>
                               {Math.round(milestone.tasks.filter(t => t.status === 'done').length / milestone.tasks.length * 100)}%
@@ -613,6 +705,38 @@ export default function TimelinePage({ params }: TimelinePageProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Milestone Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Milestone</DialogTitle>
+            <DialogDescription>Update milestone details</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div>
+              <input className="w-full border rounded px-2 py-1 text-sm" placeholder="Milestone name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <textarea className="w-full border rounded px-2 py-1 text-sm" placeholder="Description" rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+            </div>
+            <div>
+              <input type="date" className="w-full border rounded px-2 py-1 text-sm" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+            </div>
+            <div>
+              <select className="w-full border rounded px-2 py-1 text-sm" value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                <option value="planned">Planned</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+              <Button onClick={saveEdit} disabled={!editName.trim() || !editDate}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

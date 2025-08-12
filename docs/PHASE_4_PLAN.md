@@ -130,7 +130,7 @@ This section covers features at the main workspace dashboard level.
 ### 2.2. Workspace Reports
 * **Issue:** The entire section needs backend logic.
 * **To-Do List:**
-    -   [ ] **Backend:** Create a new API endpoint `GET /api/workspaces/[workspaceId]/reports` that aggregates data from all projects within the workspace to calculate the following:
+    -   [x] **Backend:** Create a new API endpoint `GET /api/workspaces/[workspaceId]/reports` that aggregates data from all projects within the workspace to calculate the following:
         * **Active Projects:** Count of projects not archived.
         * **Team Velocity:** Average velocity across all teams/projects.
         * **Total Story Points Delivered:** Sum of story points from all completed tasks in the workspace for a given period.
@@ -139,7 +139,7 @@ This section covers features at the main workspace dashboard level.
         * **Resource Allocation Heatmap:** A matrix of users and their assigned task counts/story points across all projects to identify workload.
         * **Workspace Cycle Time:** Average cycle time across all projects.
         * **Project Health Status:** A summary of how many projects are "On Track," "At Risk," etc.
-    -   [ ] **Frontend:** Build individual widgets for each of these metrics and populate them with data from the new API endpoint.
+    -   [x] **Frontend:** Build individual widgets for each of these metrics and populate them with data from the new API endpoint.
 
 ### 2.3. Usage & Analytics
 * **Issue:** This page is static and needs full backend implementation.

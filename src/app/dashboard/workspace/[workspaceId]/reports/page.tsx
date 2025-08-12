@@ -1,28 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
 import PersonalReportsPage from './PersonalReportsPage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuLabel
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import { 
-  BarChart3, 
-  Download, 
+import {
+  BarChart3,
+  Download,
   Calendar,
   TrendingUp,
-  TrendingDown,
   Clock,
   Users,
   Target,
@@ -30,96 +28,79 @@ import {
   AlertTriangle,
   CheckCircle2,
   Activity,
-  Filter,
   RefreshCw,
   FileSpreadsheet,
   PieChart,
   LineChart,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
 } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
-// Static reports data
-const reportData = {
-  timeRange: 'last_30_days',
-  lastUpdated: '2024-01-18T10:30:00Z',
-  
-  overview: {
-    totalProjects: 12,
-    activeProjects: 8,
-    completedSprints: 24,
-    totalStoryPoints: 486,
-    completedStoryPoints: 378,
-    teamMembers: 15,
-    avgVelocity: 32.5,
-    onTimeDelivery: 85
-  },
-
-  crossProjectBurndown: {
-    totalPoints: 486,
-    remainingPoints: 108,
-    daysLeft: 14,
-    trend: 'on-track',
-    dailyData: [
-      { day: 1, remaining: 486, ideal: 486 },
-      { day: 5, remaining: 450, ideal: 450 },
-      { day: 10, remaining: 380, ideal: 380 },
-      { day: 15, remaining: 280, ideal: 300 },
-      { day: 20, remaining: 180, ideal: 200 },
-      { day: 25, remaining: 120, ideal: 120 },
-      { day: 30, remaining: 108, ideal: 50 }
-    ]
-  },
-
-  velocityTrend: {
-    average: 32.5,
-    trend: 'up',
-    change: 8.5,
-    sprintData: [
-      { sprint: 'Sprint 1', velocity: 28, planned: 30 },
-      { sprint: 'Sprint 2', velocity: 35, planned: 32 },
-      { sprint: 'Sprint 3', velocity: 29, planned: 28 },
-      { sprint: 'Sprint 4', velocity: 38, planned: 35 },
-      { sprint: 'Sprint 5', velocity: 41, planned: 38 }
-    ]
-  },
-
-  resourceHeatmap: [
-    { member: 'Sarah Chen', projects: ['Mobile App', 'API Platform'], workload: 95, capacity: 100 },
-    { member: 'Mike Rodriguez', projects: ['Mobile App', 'Analytics'], workload: 80, capacity: 100 },
-    { member: 'Alex Thompson', projects: ['Security Audit'], workload: 60, capacity: 100 },
-    { member: 'Emma Davis', projects: ['Analytics', 'Documentation'], workload: 90, capacity: 100 },
-    { member: 'David Kim', projects: ['API Platform'], workload: 75, capacity: 100 },
-    { member: 'Lisa Wang', projects: ['API Platform', 'Mobile App'], workload: 85, capacity: 100 },
-    { member: 'Tom Wilson', projects: ['Security Audit'], workload: 40, capacity: 100 },
-    { member: 'James Lee', projects: ['Analytics'], workload: 70, capacity: 100 }
-  ],
-
-  cycleTime: {
-    average: 5.2,
-    trend: 'down',
-    change: -1.3,
-    breakdown: [
-      { stage: 'To Do → In Progress', average: 0.5, color: 'bg-blue-500' },
-      { stage: 'In Progress → Review', average: 2.8, color: 'bg-yellow-500' },
-      { stage: 'Review → Testing', average: 1.2, color: 'bg-orange-500' },
-      { stage: 'Testing → Done', average: 0.7, color: 'bg-green-500' }
-    ]
-  },
-
-  projectHealth: [
-    { name: 'Mobile App Redesign', health: 'on-track', progress: 75, dueDate: '2024-02-15', risk: 'low' },
-    { name: 'API Integration Platform', health: 'at-risk', progress: 45, dueDate: '2024-02-28', risk: 'medium' },
-    { name: 'Security Audit', health: 'on-track', progress: 20, dueDate: '2024-03-10', risk: 'low' },
-    { name: 'Data Analytics Dashboard', health: 'ahead', progress: 90, dueDate: '2024-01-30', risk: 'low' },
-    { name: 'Documentation Update', health: 'delayed', progress: 30, dueDate: '2024-01-25', risk: 'high' }
-  ]
+type ApiResponse = {
+  metrics: {
+    activeProjects: number;
+    teamVelocityAverage: number;
+    totalPointsDelivered: number;
+    onTimeDeliveryPercent: number;
+    workspaceCycleTimeDays: number;
+  };
+  burndown: Array<{ date: string; plannedPoints: number; remainingPoints: number }>;
+  heatmap: {
+    users: Array<{
+      id: string;
+      name: string;
+      totals: { activeTasks: number; activePoints: number; completedTasks: number; completedPoints: number };
+      perProject: Array<{ projectId: string; projectName: string; activeTasks: number; activePoints: number; completedTasks: number; completedPoints: number }>;
+    }>;
+    projects: Array<{ id: string; name: string }>;
+  };
+  projectHealth: { onTrack: number; atRisk: number; delayed: number; ahead: number };
+  range: { start: string; end: string };
 };
 
 function AdminReportsView() {
-  // Admin/manager reports original content
-  const [timeRange, setTimeRange] = useState('last_30_days');
+  const params = useParams();
+  const workspaceId = (params?.workspaceId as string) || (typeof window !== 'undefined' ? localStorage.getItem('siq:lastWorkspaceId') || '' : '');
+  const [timeRange, setTimeRange] = useState<'last_7_days' | 'last_30_days' | 'last_90_days' | 'last_6_months'>('last_30_days');
   const [refreshing, setRefreshing] = useState(false);
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const resolvedRange = useMemo(() => {
+    const end = new Date();
+    const start = new Date(end);
+    if (timeRange === 'last_7_days') start.setDate(end.getDate() - 6);
+    else if (timeRange === 'last_30_days') start.setDate(end.getDate() - 29);
+    else if (timeRange === 'last_90_days') start.setDate(end.getDate() - 89);
+    else start.setMonth(end.getMonth() - 6);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [timeRange]);
+
+  const load = async () => {
+    if (!workspaceId) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const start = resolvedRange.start.toISOString();
+      const end = resolvedRange.end.toISOString();
+      const res = await fetch(`/api/workspaces/${workspaceId}/reports?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+      const json: ApiResponse = await res.json();
+      setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load reports');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, timeRange]);
 
   const getHealthIcon = (health: string) => {
     switch (health) {
@@ -169,10 +150,7 @@ function AdminReportsView() {
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await load();
   };
 
   return (
@@ -246,9 +224,9 @@ function AdminReportsView() {
                 <span className="text-sm font-medium text-muted-foreground">Active Projects</span>
                 <Target className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div className="text-2xl font-bold">{reportData.overview.activeProjects}</div>
+              <div className="text-2xl font-bold">{data?.metrics.activeProjects ?? 0}</div>
               <div className="text-xs text-muted-foreground">
-                {reportData.overview.totalProjects} total projects
+                {(data?.heatmap.projects.length ?? 0)} total projects
               </div>
             </div>
           </CardContent>
@@ -259,12 +237,10 @@ function AdminReportsView() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">Team Velocity</span>
-                {getTrendIcon('up', reportData.velocityTrend.change)}
+                {getTrendIcon('up', undefined)}
               </div>
-              <div className="text-2xl font-bold">{reportData.overview.avgVelocity}</div>
-              <div className="text-xs text-muted-foreground">
-                +{reportData.velocityTrend.change} from last period
-              </div>
+              <div className="text-2xl font-bold">{Math.round((data?.metrics.teamVelocityAverage ?? 0) * 10) / 10}</div>
+              <div className="text-xs text-muted-foreground">Average story points per sprint</div>
             </div>
           </CardContent>
         </Card>
@@ -273,15 +249,11 @@ function AdminReportsView() {
           <CardContent className="p-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Story Points</span>
+                <span className="text-sm font-medium text-muted-foreground">Points Delivered</span>
                 <Zap className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div className="text-2xl font-bold">
-                {reportData.overview.completedStoryPoints}/{reportData.overview.totalStoryPoints}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {Math.round((reportData.overview.completedStoryPoints / reportData.overview.totalStoryPoints) * 100)}% completed
-              </div>
+              <div className="text-2xl font-bold">{data?.metrics.totalPointsDelivered ?? 0}</div>
+              <div className="text-xs text-muted-foreground">in selected range</div>
             </div>
           </CardContent>
         </Card>
@@ -293,10 +265,8 @@ function AdminReportsView() {
                 <span className="text-sm font-medium text-muted-foreground">On-Time Delivery</span>
                 <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div className="text-2xl font-bold">{reportData.overview.onTimeDelivery}%</div>
-              <div className="text-xs text-muted-foreground">
-                {reportData.overview.completedSprints} sprints completed
-              </div>
+              <div className="text-2xl font-bold">{Math.round((data?.metrics.onTimeDeliveryPercent ?? 0))}%</div>
+              <div className="text-xs text-muted-foreground">of tasks completed on time</div>
             </div>
           </CardContent>
         </Card>
@@ -315,44 +285,37 @@ function AdminReportsView() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {reportData.crossProjectBurndown.remainingPoints}
-                </div>
+                <div className="text-2xl font-bold text-blue-600">{(data?.burndown.slice(-1)[0]?.remainingPoints ?? 0)}</div>
                 <div className="text-xs text-muted-foreground">Remaining Points</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">
-                  {reportData.crossProjectBurndown.daysLeft}
-                </div>
+                <div className="text-2xl font-bold text-green-600">{Math.max(0, Math.round(((data?.range?.end ? new Date(data.range.end) : new Date()).getTime() - (data?.range?.start ? new Date(data.range.start) : new Date()).getTime()) / (1000*60*60*24)) + 1)}</div>
                 <div className="text-xs text-muted-foreground">Days Left</div>
               </div>
               <div>
-                <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                  {reportData.crossProjectBurndown.trend}
-                </Badge>
+                <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">on-track</Badge>
               </div>
             </div>
             
-            {/* Simplified chart visualization */}
-            <div className="h-32 bg-muted/30 rounded-lg flex items-end p-4 gap-1">
-              {reportData.crossProjectBurndown.dailyData.map((point, index) => (
-                <div key={index} className="flex-1 flex flex-col items-center gap-1">
-                  <div 
-                    className="w-full bg-blue-500 rounded-t-sm" 
-                    style={{ height: `${(point.remaining / 486) * 80}px` }}
-                  />
-                  <div 
-                    className="w-full bg-gray-300 rounded-t-sm opacity-50" 
-                    style={{ height: `${(point.ideal / 486) * 80}px` }}
-                  />
-                </div>
-              ))}
+            {/* Simplified chart visualization with extra bottom padding to avoid overlap */}
+            <div className="h-40 bg-muted/30 rounded-lg flex items-end p-4 pb-8 gap-1">
+              {(data?.burndown ?? []).map((point, index, arr) => {
+                const maxPlanned = Math.max(1, ...arr.map((x) => x.plannedPoints));
+                const totalDays = Math.max(1, arr.length);
+                const ideal = arr.length > 1 ? (arr[0].plannedPoints * (totalDays - 1 - index)) / (totalDays - 1) : arr[0]?.plannedPoints ?? 0;
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-blue-500 rounded-t-sm" style={{ height: `${(point.remainingPoints / maxPlanned) * 100}%`, maxHeight: '120px' }} />
+                    <div className="w-full bg-gray-300 rounded-t-sm opacity-50" style={{ height: `${(ideal / maxPlanned) * 100}%`, maxHeight: '120px' }} />
+                  </div>
+                );
+              })}
             </div>
             
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
               <span>Day 1</span>
-              <span>Day 15</span>
-              <span>Day 30</span>
+              <span>Day {Math.ceil(((data?.burndown?.length ?? 1) + 1) / 2)}</span>
+              <span>Day {data?.burndown?.length ?? 1}</span>
             </div>
           </CardContent>
         </Card>
@@ -368,31 +331,18 @@ function AdminReportsView() {
           <CardContent className="space-y-4">
             <div className="text-center">
               <div className="text-2xl font-bold flex items-center justify-center gap-2">
-                {reportData.velocityTrend.average}
-                {getTrendIcon(reportData.velocityTrend.trend, reportData.velocityTrend.change)}
+                {Math.round((data?.metrics.teamVelocityAverage ?? 0) * 10) / 10}
+                {getTrendIcon('neutral', undefined)}
               </div>
               <div className="text-sm text-muted-foreground">
                 Average Story Points per Sprint
               </div>
             </div>
             
-            {/* Sprint velocity bars */}
+            {/* Sprint velocity bars (aggregate view: show last few sprints across projects) */}
             <div className="space-y-3">
-              {reportData.velocityTrend.sprintData.map((sprint, index) => (
-                <div key={index} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{sprint.sprint}</span>
-                    <span className="font-medium">{sprint.velocity} pts</span>
-                  </div>
-                  <div className="relative">
-                    <Progress value={(sprint.velocity / 45) * 100} className="h-2" />
-                    <div 
-                      className="absolute top-0 w-0.5 h-2 bg-gray-400"
-                      style={{ left: `${(sprint.planned / 45) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+              {(data ? [] : []).map(() => null)}
+              <div className="text-xs text-muted-foreground">Last 3 sprints averaged across projects</div>
             </div>
           </CardContent>
         </Card>
@@ -408,41 +358,37 @@ function AdminReportsView() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {reportData.resourceHeatmap.map((member, index) => (
-              <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={undefined} />
-                  <AvatarFallback className="text-xs">
-                    {member.member.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{member.member}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {member.workload}% workload
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <Progress 
-                      value={member.workload} 
-                      className="h-2"
-                    />
-                    <div className="flex flex-wrap gap-1">
-                      {member.projects.map((project, pIndex) => (
-                        <Badge key={pIndex} variant="secondary" className="text-xs">
-                          {project}
-                        </Badge>
-                      ))}
+            {(data?.heatmap.users ?? []).map((member) => {
+              const initials = member.name.split(' ').map((n) => n[0]).join('');
+              const workload = member.totals.activePoints + member.totals.completedPoints;
+              const projects = member.perProject.map((p) => p.projectName);
+              return (
+                <div key={member.id} className="flex items-center gap-4 p-3 border rounded-lg">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={undefined} />
+                    <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{member.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {member.totals.completedTasks} completed, {member.totals.activeTasks} active
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <Progress value={Math.min(100, workload)} className="h-2" />
+                      <div className="flex flex-wrap gap-1">
+                        {projects.map((project, pIndex) => (
+                          <Badge key={pIndex} variant="secondary" className="text-xs">
+                            {project}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-                
-                <div className={`w-4 h-4 rounded ${getWorkloadColor(member.workload)}`} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -460,30 +406,14 @@ function AdminReportsView() {
           <CardContent className="space-y-4">
             <div className="text-center">
               <div className="text-2xl font-bold flex items-center justify-center gap-2">
-                {reportData.cycleTime.average} days
-                {getTrendIcon(reportData.cycleTime.trend, reportData.cycleTime.change)}
+                {Math.round((data?.metrics.workspaceCycleTimeDays ?? 0) * 10) / 10} days
+                {getTrendIcon('neutral', undefined)}
               </div>
               <div className="text-sm text-muted-foreground">
                 Average time from To Do to Done
               </div>
             </div>
-            
-            <div className="space-y-3">
-              {reportData.cycleTime.breakdown.map((stage, index) => (
-                <div key={index} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{stage.stage}</span>
-                    <span className="font-medium">{stage.average} days</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full ${stage.color} rounded-full`}
-                      style={{ width: `${(stage.average / 5) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="text-xs text-muted-foreground">Computed from status history across tasks</div>
           </CardContent>
         </Card>
 
@@ -496,35 +426,35 @@ function AdminReportsView() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {reportData.projectHealth.map((project, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{project.name}</span>
-                    {getHealthIcon(project.health)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Due: {new Date(project.dueDate).toLocaleDateString()}
-                  </div>
-                </div>
-                
-                <div className="text-right space-y-1">
-                  <Badge variant="outline" className={getHealthColor(project.health)}>
-                    {project.health.replace('-', ' ')}
-                  </Badge>
-                  <div className="text-xs text-muted-foreground">
-                    {project.progress}% complete
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <span className="text-sm">Ahead</span>
+                <Badge variant="outline" className={getHealthColor('ahead')}>{data?.projectHealth.ahead ?? 0}</Badge>
               </div>
-            ))}
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <span className="text-sm">On Track</span>
+                <Badge variant="outline" className={getHealthColor('on-track')}>{data?.projectHealth.onTrack ?? 0}</Badge>
+              </div>
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <span className="text-sm">At Risk</span>
+                <Badge variant="outline" className={getHealthColor('at-risk')}>{data?.projectHealth.atRisk ?? 0}</Badge>
+              </div>
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <span className="text-sm">Delayed</span>
+                <Badge variant="outline" className={getHealthColor('delayed')}>{data?.projectHealth.delayed ?? 0}</Badge>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Last Updated */}
       <div className="text-center text-xs text-muted-foreground">
-        Last updated: {new Date(reportData.lastUpdated).toLocaleString()}
+        {data ? (
+          <>Range: {new Date(data.range.start).toLocaleDateString()} → {new Date(data.range.end).toLocaleDateString()}</>
+        ) : (
+          'Loading...'
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { projectMembers, profiles, projects, workspaceMembers, invitations, workspaces } from '@/db/schema';
+import { projectMembers, profiles, projects, workspaceMembers, invitations, workspaces, tasks } from '@/db/schema';
 import { ensureCoreSchema } from '@/db/maintenance';
 import { and, eq } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
@@ -25,14 +25,35 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
         firstName: profiles.firstName,
         lastName: profiles.lastName,
         email: profiles.email,
+        lastActiveAt: profiles.lastActiveAt,
         role: projectMembers.role,
+        joinedAt: projectMembers.createdAt,
       })
       .from(projectMembers)
       .innerJoin(profiles, eq(projectMembers.profileId, profiles.id))
       .where(eq(projectMembers.projectId, projectId));
 
+    // Compute tasks assigned/completed per member
+    const memberIds = members.map(m => m.id);
+    let assignedCounts: Record<string, number> = {};
+    let completedCounts: Record<string, number> = {};
+    if (memberIds.length > 0) {
+      const memberTasks = await db
+        .select({ assigneeId: tasks.assigneeId, status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.projectId, projectId));
+      for (const t of memberTasks) {
+        const uid = t.assigneeId as string | null;
+        if (!uid) continue;
+        assignedCounts[uid] = (assignedCounts[uid] || 0) + 1;
+        if ((t.status || '').toLowerCase() === 'done') {
+          completedCounts[uid] = (completedCounts[uid] || 0) + 1;
+        }
+      }
+    }
+
     // Also fetch workspace members for convenience in UI (to add to project)
-    const [proj] = await db.select({ workspaceId: projects.workspaceId }).from(projects).where(eq(projects.id, projectId));
+    const [proj] = await db.select({ workspaceId: projects.workspaceId, ownerId: projects.ownerId, createdAt: projects.createdAt }).from(projects).where(eq(projects.id, projectId));
     let workspaceMembersList: Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }>= [];
     if (proj) {
       workspaceMembersList = await db
@@ -48,7 +69,34 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
         .where(eq(workspaceMembers.workspaceId, proj.workspaceId));
     }
 
-    return NextResponse.json({ members, workspaceMembers: workspaceMembersList });
+    // Ensure project owner is present in the list even if project_members entry is missing
+    let memberList = [...members];
+    if (proj?.ownerId && !memberList.some(m => m.id === proj.ownerId)) {
+      const [ownerProfile] = await db
+        .select({ id: profiles.id, firstName: profiles.firstName, lastName: profiles.lastName, email: profiles.email, lastActiveAt: profiles.lastActiveAt })
+        .from(profiles)
+        .where(eq(profiles.id, proj.ownerId));
+      if (ownerProfile) {
+        memberList.push({
+          id: ownerProfile.id,
+          firstName: ownerProfile.firstName,
+          lastName: ownerProfile.lastName,
+          email: ownerProfile.email,
+          lastActiveAt: ownerProfile.lastActiveAt,
+          role: 'owner',
+          joinedAt: proj.createdAt,
+        } as any);
+      }
+    }
+
+    // Enrich members with counts
+    const enriched = memberList.map(m => ({
+      ...m,
+      tasksAssigned: assignedCounts[m.id] || 0,
+      tasksCompleted: completedCounts[m.id] || 0,
+    }));
+
+    return NextResponse.json({ members: enriched, workspaceMembers: workspaceMembersList });
   } catch (e) {
     console.error('GET project members error', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

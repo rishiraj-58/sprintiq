@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,105 +66,17 @@ import {
   Trash2
 } from 'lucide-react';
 
-// Static project team data
-const projectMembers = [
-  {
-    id: '1',
-    user: {
-      id: 'user_1',
-      name: 'Sarah Chen',
-      email: 'sarah@company.com',
-      avatar: null,
-      title: 'Senior Frontend Developer'
-    },
-    role: 'owner',
-    joinedAt: '2024-01-01',
-    lastActive: '2024-01-18T10:30:00Z',
-    tasksAssigned: 8,
-    tasksCompleted: 6,
-    permissions: ['view', 'create', 'edit', 'delete', 'manage_members', 'manage_settings']
-  },
-  {
-    id: '2',
-    user: {
-      id: 'user_2',
-      name: 'Mike Rodriguez',
-      email: 'mike@company.com',
-      avatar: null,
-      title: 'Project Manager'
-    },
-    role: 'manager',
-    joinedAt: '2024-01-02',
-    lastActive: '2024-01-18T09:15:00Z',
-    tasksAssigned: 5,
-    tasksCompleted: 4,
-    permissions: ['view', 'create', 'edit', 'delete', 'manage_members']
-  },
-  {
-    id: '3',
-    user: {
-      id: 'user_3',
-      name: 'Alex Thompson',
-      email: 'alex@company.com',
-      avatar: null,
-      title: 'UX Designer'
-    },
-    role: 'member',
-    joinedAt: '2024-01-05',
-    lastActive: '2024-01-17T16:45:00Z',
-    tasksAssigned: 6,
-    tasksCompleted: 3,
-    permissions: ['view', 'create', 'edit']
-  },
-  {
-    id: '4',
-    user: {
-      id: 'user_4',
-      name: 'Emma Davis',
-      email: 'emma@company.com',
-      avatar: null,
-      title: 'Backend Developer'
-    },
-    role: 'member',
-    joinedAt: '2024-01-08',
-    lastActive: '2024-01-18T08:20:00Z',
-    tasksAssigned: 7,
-    tasksCompleted: 5,
-    permissions: ['view', 'create', 'edit']
-  },
-  {
-    id: '5',
-    user: {
-      id: 'user_5',
-      name: 'David Kim',
-      email: 'david@company.com',
-      avatar: null,
-      title: 'DevOps Engineer'
-    },
-    role: 'member',
-    joinedAt: '2024-01-10',
-    lastActive: '2024-01-17T14:30:00Z',
-    tasksAssigned: 4,
-    tasksCompleted: 4,
-    permissions: ['view', 'create', 'edit']
-  },
-  {
-    id: '6',
-    user: {
-      id: 'user_6',
-      name: 'Lisa Wang',
-      email: 'lisa@company.com',
-      avatar: null,
-      title: 'QA Engineer'
-    },
-    role: 'viewer',
-    joinedAt: '2024-01-12',
-    lastActive: '2024-01-16T11:00:00Z',
-    tasksAssigned: 2,
-    tasksCompleted: 1,
-    permissions: ['view']
-  }
-];
+// Live project team data state
+type ProjectMemberRow = {
+  id: string;
+  user: { id: string; firstName: string | null; lastName: string | null; email: string | null; avatarUrl: string | null; title?: string | null };
+  role: 'owner' | 'manager' | 'member' | 'viewer';
+  joinedAt?: string | null;
+  lastActive?: string | null;
+  tasksAssigned?: number;
+  tasksCompleted?: number;
+  permissions: string[];
+};
 
 // Available workspace members that can be added to project
 const availableMembers = [
@@ -203,8 +116,61 @@ export default function TeamPage({ params }: TeamPageProps) {
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedRole, setSelectedRole] = useState('member');
+  const { user } = useUser();
   const projectPerms = usePermissions('project', params.projectId);
   const isMember = projectPerms.canCreate || projectPerms.canEdit ? !(projectPerms.canManageMembers || projectPerms.canManageSettings) : false;
+  // Default booleans from backend perms
+  let permsIsOwner = projectPerms.canManageSettings;
+  let permsIsManager = !permsIsOwner && projectPerms.canManageMembers;
+  
+  const [members, setMembers] = useState<ProjectMemberRow[]>([]);
+  const [workspacePool, setWorkspacePool] = useState<any[]>([]);
+
+  const loadMembers = async () => {
+    try {
+      const res = await fetch(`/api/projects/${params.projectId}/members`, { headers: { 'Cache-Control': 'no-cache' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      const rows: ProjectMemberRow[] = (data.members || []).map((m: any) => ({
+        id: m.id,
+        user: { id: m.id, firstName: m.firstName, lastName: m.lastName, email: m.email, avatarUrl: null },
+        role: m.role,
+        joinedAt: m.joinedAt || null,
+        lastActive: m.lastActiveAt || null,
+        tasksAssigned: m.tasksAssigned ?? 0,
+        tasksCompleted: m.tasksCompleted ?? 0,
+        permissions: roleToCaps(m.role),
+      }));
+      setMembers(rows);
+      setWorkspacePool(data.workspaceMembers || []);
+    } catch (e) {
+      console.error('Failed to load project members', e);
+    }
+  };
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        await loadMembers();
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    run();
+  }, [params.projectId]);
+
+  const roleToCaps = (role: string): string[] => {
+    switch (role) {
+      case 'owner':
+        return ['view', 'create', 'edit', 'delete', 'manage_members', 'manage_settings'];
+      case 'manager':
+        return ['view', 'create', 'edit', 'manage_members'];
+      case 'viewer':
+        return ['view'];
+      default:
+        return ['view', 'create', 'edit'];
+    }
+  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -262,23 +228,33 @@ export default function TeamPage({ params }: TeamPageProps) {
     }
   };
 
-  const filteredMembers = projectMembers.filter(member => {
+  const filteredMembers = members.filter(member => {
     const matchesSearch = !searchQuery || 
-      member.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.user.title.toLowerCase().includes(searchQuery.toLowerCase());
+      `${member.user.firstName || ''} ${member.user.lastName || ''}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (member.user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (member.user.title || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesRole = roleFilter === 'all' || member.role === roleFilter;
     
     return matchesSearch && matchesRole;
   });
 
-  const roleStats = {
-    owner: projectMembers.filter(m => m.role === 'owner').length,
-    manager: projectMembers.filter(m => m.role === 'manager').length,
-    member: projectMembers.filter(m => m.role === 'member').length,
-    viewer: projectMembers.filter(m => m.role === 'viewer').length
-  };
+  const roleStats = useMemo(() => ({
+    owner: members.filter(m => m.role === 'owner').length,
+    manager: members.filter(m => m.role === 'manager').length,
+    member: members.filter(m => m.role === 'member').length,
+    viewer: members.filter(m => m.role === 'viewer').length
+  }), [members]);
+
+  // Derive current user's project role from members list if possible
+  const myProjectRole = useMemo(() => {
+    if (!user?.id) return null;
+    const me = members.find(m => m.id === user.id);
+    return me?.role || null;
+  }, [user?.id, members]);
+
+  const isOwnerUser = myProjectRole ? myProjectRole === 'owner' : permsIsOwner;
+  const isManagerUser = myProjectRole ? myProjectRole === 'manager' : (!isOwnerUser && permsIsManager);
 
   const handleAddMember = () => {
     // Add member logic would go here
@@ -288,10 +264,17 @@ export default function TeamPage({ params }: TeamPageProps) {
     setSelectedRole('member');
   };
 
-  const handleRemoveMember = () => {
-    // Remove member logic would go here
-    console.log('Removing member:', memberToRemove);
-    setMemberToRemove(null);
+  const handleRemoveMember = async () => {
+    if (!memberToRemove) return;
+    try {
+      const res = await fetch(`/api/projects/${params.projectId}/members?profileId=${memberToRemove}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove member');
+      await loadMembers();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setMemberToRemove(null);
+    }
   };
 
   const handleRoleChange = (memberId: string, newRole: string) => {
@@ -389,7 +372,7 @@ export default function TeamPage({ params }: TeamPageProps) {
                 <Users className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium">Total Members</span>
               </div>
-              <div className="text-2xl font-bold">{projectMembers.length}</div>
+              <div className="text-2xl font-bold">{members.length}</div>
               <div className="text-xs text-muted-foreground">
                 Active project members
               </div>
@@ -405,7 +388,11 @@ export default function TeamPage({ params }: TeamPageProps) {
                 <span className="text-sm font-medium">Active Today</span>
               </div>
               <div className="text-2xl font-bold">
-                {projectMembers.filter(m => getActivityStatus(m.lastActive).status === 'online' || getActivityStatus(m.lastActive).status === 'recent').length}
+                {members.filter(m => typeof m.lastActive === 'string' && (() => {
+                  const la = m.lastActive as string;
+                  const st = getActivityStatus(la).status;
+                  return st === 'online' || st === 'recent';
+                })()).length}
               </div>
               <div className="text-xs text-muted-foreground">
                 Members online or recently active
@@ -436,9 +423,7 @@ export default function TeamPage({ params }: TeamPageProps) {
                 <Calendar className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-medium">Tasks Assigned</span>
               </div>
-              <div className="text-2xl font-bold">
-                {projectMembers.reduce((sum, member) => sum + member.tasksAssigned, 0)}
-              </div>
+              <div className="text-2xl font-bold">{members.reduce((sum, member) => sum + (member.tasksAssigned || 0), 0)}</div>
               <div className="text-xs text-muted-foreground">
                 Total active assignments
               </div>
@@ -505,8 +490,8 @@ export default function TeamPage({ params }: TeamPageProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredMembers.map((member) => {
-              const activityStatus = getActivityStatus(member.lastActive);
+              {filteredMembers.map((member) => {
+              const activityStatus = typeof member.lastActive === 'string' ? getActivityStatus(member.lastActive) : { status: 'offline', text: 'Inactive' };
               
               return (
                 <TableRow key={member.id}>
@@ -514,16 +499,18 @@ export default function TeamPage({ params }: TeamPageProps) {
                     <div className="flex items-center gap-3">
                       <div className="relative">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={member.user.avatar || undefined} />
+                           <AvatarImage src={member.user.avatarUrl || undefined} />
                           <AvatarFallback>
-                            {member.user.name.split(' ').map(n => n[0]).join('')}
+                             {`${member.user.firstName || ''} ${member.user.lastName || ''}`.trim().split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <div className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-background ${getActivityStatusColor(activityStatus.status)}`} />
                       </div>
                       <div>
-                        <div className="font-medium">{member.user.name}</div>
-                        <div className="text-sm text-muted-foreground">{member.user.title}</div>
+                        <div className="font-medium">{`${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() || 'Unknown'}</div>
+                        {member.user.title && (
+                          <div className="text-sm text-muted-foreground">{member.user.title}</div>
+                        )}
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                           <Mail className="h-3 w-3" />
                           {member.user.email}
@@ -547,64 +534,55 @@ export default function TeamPage({ params }: TeamPageProps) {
                   <TableCell>
                     <div className="space-y-1">
                       <div className="text-sm font-medium">{activityStatus.text}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Last: {new Date(member.lastActive).toLocaleDateString()}
-                      </div>
+                       {typeof member.lastActive === 'string' ? (
+                         <div className="text-xs text-muted-foreground">Last: {new Date(member.lastActive || '').toLocaleDateString()}</div>
+                       ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="text-sm">
-                        <span className="font-medium">{member.tasksCompleted}</span>
-                        <span className="text-muted-foreground">/{member.tasksAssigned}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {Math.round((member.tasksCompleted / member.tasksAssigned) * 100) || 0}% complete
-                      </div>
+                       <div className="text-sm">
+                         <span className="font-medium">{member.tasksCompleted ?? 0}</span>
+                         <span className="text-muted-foreground">/{member.tasksAssigned ?? 0}</span>
+                       </div>
+                       <div className="text-xs text-muted-foreground">
+                         {(() => {
+                           const a = member.tasksAssigned || 0;
+                           const c = member.tasksCompleted || 0;
+                           return a ? Math.round((c / a) * 100) : 0;
+                         })()}% complete
+                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      {new Date(member.joinedAt).toLocaleDateString()}
+                      {member.joinedAt ? new Date(member.joinedAt as any).toLocaleDateString() : '—'}
                     </div>
                   </TableCell>
                   <TableCell>
-                    {!isMember && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Change Role</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'viewer')}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Make Viewer
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'member')}>
-                          <Users className="h-4 w-4 mr-2" />
-                          Make Member
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'manager')}>
-                          <Shield className="h-4 w-4 mr-2" />
-                          Make Manager
-                        </DropdownMenuItem>
-                        {member.role !== 'owner' && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={() => setMemberToRemove(member.id)}
-                            >
-                              <UserMinus className="h-4 w-4 mr-2" />
-                              Remove from Project
-                            </DropdownMenuItem>
-                          </>
+                    {(isOwnerUser || isManagerUser) && (
+                      <select 
+                        className="border rounded px-2 py-1 text-sm bg-white"
+                        onChange={(e) => {
+                          const action = e.target.value;
+                          if (action === 'remove') {
+                            setMemberToRemove(member.id);
+                          } else if (action === 'viewer' || action === 'member' || action === 'manager') {
+                            handleRoleChange(member.id, action);
+                          }
+                          // Reset to empty after action
+                          e.target.value = '';
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <option value="">••• Actions</option>
+                        <option value="viewer">👁️ Make Viewer</option>
+                        <option value="member">👥 Make Member</option>
+                        <option value="manager">🛡️ Make Manager</option>
+                        {(isOwnerUser || (isManagerUser && member.role !== 'owner')) && (
+                          <option value="remove">❌ Remove from Project</option>
                         )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      </select>
                     )}
                   </TableCell>
                 </TableRow>

@@ -69,16 +69,16 @@ This section covers features and fixes within the scope of a single project.
 ### 1.3. Reports & Analytics
 * **Issue:** The report calculations are placeholders. Real logic is needed.
 * **To-Do List:**
-    -   [ ] **Backend:** Create a new API endpoint `GET /api/projects/[projectId]/reports` that calculates and returns all the following metrics. The endpoint should accept a date range for filtering.
-    -   [ ] **Metric Logic:**
+    -   [x] **Backend:** Create a new API endpoint `GET /api/projects/[projectId]/reports` that calculates and returns all the following metrics. The endpoint should accept a date range for filtering.
+    -   [x] **Metric Logic:**
         * **Average Velocity:** Calculate the sum of story points for all completed tasks in the last 3 sprints and divide by 3.
         * **Average Cycle Time:** For all tasks completed in the date range, calculate the average time difference between `status = 'In Progress'` and `status = 'Done'`.
         * **Total Points Delivered:** Sum of story points for all tasks completed in the date range.
         * **Delivery Efficiency:** `(Total points completed / Total points planned in the sprint) * 100`.
-    -   [ ] **Cumulative Flow Diagram:**
+    -   [x] **Cumulative Flow Diagram:**
         * **Backend:** The API needs to return a daily snapshot of how many tasks were in each status category (To Do, In Progress, Done) for the given date range.
         * **Frontend:** Use this data to render the stacked area chart.
-    -   [ ] **Workload Distribution:**
+    -   [x] **Workload Distribution:**
         * **Backend:** The API should return a list of team members and the count (or sum of story points) of tasks they completed in the date range.
         * **Frontend:** Use this data to render the pie or bar chart.
 

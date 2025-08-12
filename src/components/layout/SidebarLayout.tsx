@@ -21,12 +21,26 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
   const { currentProject } = useProject();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Determine context based on current path
-  const isProjectContext = pathname.includes('/projects/') && currentProject;
-  const isWorkspaceContext = !isProjectContext && currentWorkspace;
+  // Determine context based primarily on the route path so refresh/SSR picks correct sidebar
+  const isProjectRoute = pathname.startsWith('/projects/');
+  const isWorkspaceRoute = pathname.startsWith('/dashboard/workspace/') || pathname.startsWith('/workspaces/');
 
-  // Get user permissions for role determination
-  const contextId = isProjectContext ? currentProject?.id : currentWorkspace?.id;
+  // Prefer route-based detection; fall back to store when needed
+  const isProjectContext = isProjectRoute;
+  const isWorkspaceContext = !isProjectRoute && (isWorkspaceRoute || !!currentWorkspace);
+
+  // Extract IDs from path to avoid empty permissions on refresh before stores hydrate
+  const projectIdFromPath = (() => {
+    const m = pathname.match(/^\/projects\/([^\/\?]+)/);
+    return m ? m[1] : undefined;
+  })();
+  const workspaceIdFromPath = (() => {
+    const m = pathname.match(/^(?:\/dashboard\/workspace|\/workspaces)\/([^\/\?]+)/);
+    return m ? m[1] : undefined;
+  })();
+
+  // Get user permissions for role determination using effective IDs
+  const contextId = isProjectContext ? (currentProject?.id || projectIdFromPath) : (currentWorkspace?.id || workspaceIdFromPath);
   const contextType = isProjectContext ? 'project' : 'workspace';
   const permissions = usePermissions(contextType, contextId);
 
@@ -41,26 +55,38 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
 
   const userRole = determineUserRole(capabilities);
 
+  // Avoid rendering wrong (viewer) sidebar during initial permission load
+  const waitingForPerms = (isProjectContext || isWorkspaceContext) && permissions.isLoading;
+
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const renderSidebar = () => {
-    if (isProjectContext && currentProject) {
+    if (waitingForPerms) {
+      return null;
+    }
+
+    if (isProjectContext) {
+      // Extract projectId from path if store not ready yet
+      const projectId = (currentProject?.id || projectIdFromPath || '');
+      const workspaceId = (currentProject?.workspaceId || currentWorkspace?.id || workspaceIdFromPath || '');
       return (
         <ProjectSidebar
           role={userRole}
-          projectId={currentProject.id}
-          workspaceId={currentProject.workspaceId}
+          projectId={projectId}
+          workspaceId={workspaceId}
           currentPath={pathname}
           onNavigate={() => setIsMobileMenuOpen(false)}
         />
       );
     }
 
-    if (isWorkspaceContext && currentWorkspace) {
+    if (isWorkspaceContext) {
+      // Extract workspaceId from common workspace routes if store not ready
+      const workspaceId = (currentWorkspace?.id || workspaceIdFromPath || '');
       return (
         <WorkspaceSidebar
           role={userRole}
-          workspaceId={currentWorkspace.id}
+          workspaceId={workspaceId}
           currentPath={pathname}
           onNavigate={() => setIsMobileMenuOpen(false)}
         />

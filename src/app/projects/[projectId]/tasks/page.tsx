@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,150 +53,10 @@ import {
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import MemberTasksPage from './MemberTasksPage';
+import { useTask } from '@/stores/hooks/useTask';
 import { useProject } from '@/stores/hooks/useProject';
 
-// Static task data
-const tasks = [
-  {
-    id: 'TASK-001',
-    title: 'Implement user authentication system',
-    description: 'Create a secure authentication system with OAuth integration',
-    status: 'in_progress',
-    priority: 'high',
-    assignee: {
-      id: '1',
-      name: 'Sarah Chen',
-      email: 'sarah@company.com',
-      avatar: null
-    },
-    reporter: {
-      id: '2',
-      name: 'Mike Rodriguez',
-      email: 'mike@company.com'
-    },
-    sprint: 'Sprint 3',
-    storyPoints: 8,
-    labels: ['backend', 'security'],
-    dueDate: '2024-02-15',
-    createdAt: '2024-01-10',
-    updatedAt: '2024-01-18'
-  },
-  {
-    id: 'TASK-002',
-    title: 'Design mobile app wireframes',
-    description: 'Create wireframes for the mobile application user interface',
-    status: 'todo',
-    priority: 'medium',
-    assignee: {
-      id: '3',
-      name: 'Alex Thompson',
-      email: 'alex@company.com',
-      avatar: null
-    },
-    reporter: {
-      id: '4',
-      name: 'Emma Davis',
-      email: 'emma@company.com'
-    },
-    sprint: 'Backlog',
-    storyPoints: 5,
-    labels: ['design', 'mobile'],
-    dueDate: '2024-02-20',
-    createdAt: '2024-01-12',
-    updatedAt: '2024-01-15'
-  },
-  {
-    id: 'TASK-003',
-    title: 'Setup CI/CD pipeline',
-    description: 'Configure automated deployment pipeline for the project',
-    status: 'done',
-    priority: 'high',
-    assignee: {
-      id: '5',
-      name: 'David Kim',
-      email: 'david@company.com',
-      avatar: null
-    },
-    reporter: {
-      id: '1',
-      name: 'Sarah Chen',
-      email: 'sarah@company.com'
-    },
-    sprint: 'Sprint 2',
-    storyPoints: 3,
-    labels: ['devops', 'automation'],
-    dueDate: '2024-01-25',
-    createdAt: '2024-01-05',
-    updatedAt: '2024-01-25'
-  },
-  {
-    id: 'TASK-004',
-    title: 'API performance optimization',
-    description: 'Optimize database queries and improve API response times',
-    status: 'in_review',
-    priority: 'medium',
-    assignee: {
-      id: '6',
-      name: 'Lisa Wang',
-      email: 'lisa@company.com',
-      avatar: null
-    },
-    reporter: {
-      id: '2',
-      name: 'Mike Rodriguez',
-      email: 'mike@company.com'
-    },
-    sprint: 'Sprint 3',
-    storyPoints: 6,
-    labels: ['backend', 'performance'],
-    dueDate: '2024-02-10',
-    createdAt: '2024-01-08',
-    updatedAt: '2024-01-17'
-  },
-  {
-    id: 'TASK-005',
-    title: 'User onboarding flow',
-    description: 'Design and implement the user onboarding experience',
-    status: 'todo',
-    priority: 'low',
-    assignee: null,
-    reporter: {
-      id: '3',
-      name: 'Alex Thompson',
-      email: 'alex@company.com'
-    },
-    sprint: 'Backlog',
-    storyPoints: 4,
-    labels: ['frontend', 'ux'],
-    dueDate: null,
-    createdAt: '2024-01-14',
-    updatedAt: '2024-01-14'
-  },
-  {
-    id: 'TASK-006',
-    title: 'Integration testing suite',
-    description: 'Build comprehensive integration tests for all API endpoints',
-    status: 'blocked',
-    priority: 'high',
-    assignee: {
-      id: '7',
-      name: 'Tom Wilson',
-      email: 'tom@company.com',
-      avatar: null
-    },
-    reporter: {
-      id: '5',
-      name: 'David Kim',
-      email: 'david@company.com'
-    },
-    sprint: 'Sprint 3',
-    storyPoints: 7,
-    labels: ['testing', 'backend'],
-    dueDate: '2024-02-12',
-    createdAt: '2024-01-11',
-    updatedAt: '2024-01-16'
-  }
-];
+// real data fetched via store
 
 interface TasksPageProps {
   params: {
@@ -218,6 +78,8 @@ export default function TasksPage({ params }: TasksPageProps) {
   const [view, setView] = useState<'list' | 'board'>('list');
   const [sortBy, setSortBy] = useState('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const { tasks, fetchTasks, isLoading, error } = useTask();
+  useEffect(() => { fetchTasks(params.projectId); }, [params.projectId, fetchTasks]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -270,7 +132,7 @@ export default function TasksPage({ params }: TasksPageProps) {
     const matchesSearch = !searchQuery || 
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       task.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (task.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
@@ -299,13 +161,13 @@ export default function TasksPage({ params }: TasksPageProps) {
         bValue = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
         break;
       case 'assignee':
-        aValue = a.assignee?.name || 'Unassigned';
-        bValue = b.assignee?.name || 'Unassigned';
+        aValue = a.assignee ? `${a.assignee.firstName || ''} ${a.assignee.lastName || ''}`.trim() : 'Unassigned';
+        bValue = b.assignee ? `${b.assignee.firstName || ''} ${b.assignee.lastName || ''}`.trim() : 'Unassigned';
         break;
       case 'updated':
       default:
-        aValue = new Date(a.updatedAt).getTime();
-        bValue = new Date(b.updatedAt).getTime();
+        aValue = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
+        bValue = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
         break;
     }
     
@@ -373,7 +235,7 @@ export default function TasksPage({ params }: TasksPageProps) {
                 <span className="text-sm font-medium">Total Tasks</span>
               </div>
               <div className="text-2xl font-bold">{tasks.length}</div>
-              <Progress value={(tasks.filter(t => t.status === 'done').length / tasks.length) * 100} className="h-2" />
+              <Progress value={tasks.length ? (tasks.filter(t => t.status === 'done').length / tasks.length) * 100 : 0} className="h-2" />
               <div className="text-xs text-muted-foreground">
                 {tasks.filter(t => t.status === 'done').length} completed
               </div>
@@ -418,9 +280,7 @@ export default function TasksPage({ params }: TasksPageProps) {
                 <Flag className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-medium">Story Points</span>
               </div>
-              <div className="text-2xl font-bold">
-                {tasks.reduce((sum, task) => sum + task.storyPoints, 0)}
-              </div>
+              <div className="text-2xl font-bold">{tasks.reduce((sum, task) => sum + (task.storyPoints || 0), 0)}</div>
               <div className="text-xs text-muted-foreground">
                 Total estimated points
               </div>
@@ -520,7 +380,7 @@ export default function TasksPage({ params }: TasksPageProps) {
                       key={assignee.id} 
                       onClick={() => setAssigneeFilter(assignee.id)}
                     >
-                      {assignee.name}
+                      {`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || 'Unknown'}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -613,11 +473,7 @@ export default function TasksPage({ params }: TasksPageProps) {
                           {task.description}
                         </div>
                         <div className="flex gap-1">
-                          {task.labels.map((label) => (
-                            <Badge key={label} variant="secondary" className="text-xs">
-                              {label}
-                            </Badge>
-                          ))}
+                           {/* labels omitted; not present on TaskWithAssignee */}
                         </div>
                       </div>
                     </TableCell>
@@ -637,13 +493,13 @@ export default function TasksPage({ params }: TasksPageProps) {
                     <TableCell>
                       {task.assignee ? (
                         <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={task.assignee.avatar || undefined} />
-                            <AvatarFallback className="text-xs">
-                              {task.assignee.name.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm">{task.assignee.name}</span>
+                           <Avatar className="h-6 w-6">
+                             <AvatarImage src={task.assignee.avatarUrl || undefined} />
+                             <AvatarFallback className="text-xs">
+                               {`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim().split(' ').map((n: string) => n[0]).join('')}
+                             </AvatarFallback>
+                           </Avatar>
+                           <span className="text-sm">{`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim()}</span>
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">Unassigned</span>
@@ -651,7 +507,7 @@ export default function TasksPage({ params }: TasksPageProps) {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {task.sprint}
+                         {task.sprintId ? task.sprintId : 'Backlog'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -660,9 +516,9 @@ export default function TasksPage({ params }: TasksPageProps) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {task.dueDate ? (
+                       {task.dueDate ? (
                         <div className="text-sm">
-                          {new Date(task.dueDate).toLocaleDateString()}
+                           {new Date(task.dueDate as any).toLocaleDateString()}
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">No due date</span>
@@ -728,28 +584,17 @@ export default function TasksPage({ params }: TasksPageProps) {
                             <Badge variant="outline" className="text-xs">
                               {task.storyPoints}
                             </Badge>
-                            {task.assignee && (
+                           {task.assignee && (
                               <Avatar className="h-5 w-5">
-                                <AvatarImage src={task.assignee.avatar || undefined} />
-                                <AvatarFallback className="text-xs">
-                                  {task.assignee.name.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
+                               <AvatarImage src={task.assignee.avatarUrl || undefined} />
+                               <AvatarFallback className="text-xs">
+                                 {`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim().split(' ').map((n: string) => n[0]).join('')}
+                               </AvatarFallback>
                               </Avatar>
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 flex-wrap">
-                          {task.labels.slice(0, 2).map((label) => (
-                            <Badge key={label} variant="secondary" className="text-xs">
-                              {label}
-                            </Badge>
-                          ))}
-                          {task.labels.length > 2 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{task.labels.length - 2}
-                            </Badge>
-                          )}
-                        </div>
+                        {/* labels omitted; not available on TaskWithAssignee */}
                       </div>
                     </Card>
                   ))}

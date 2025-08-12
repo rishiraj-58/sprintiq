@@ -174,9 +174,11 @@ export default function ProjectSprintsPage() {
   const [isStartSprintDialogOpen, setIsStartSprintDialogOpen] = useState(false);
   const [selectedSprint, setSelectedSprint] = useState<Sprint | null>(null);
   const [plannedSprints, setPlannedSprints] = useState<Sprint[]>([]);
-  const [backlogTasks, setBacklogTasks] = useState<Task[]>(mockBacklogTasks);
+  const [completedSprints, setCompletedSprints] = useState<(Sprint & { completedPoints?: number; totalPoints?: number })[]>([]);
+  const [backlogTasks, setBacklogTasks] = useState<Task[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [loadingPlanned, setLoadingPlanned] = useState(false);
+  const [loadingCompleted, setLoadingCompleted] = useState(false);
   
   // Form state for new sprint
   const formatDateForInput = (d: Date) => {
@@ -222,6 +224,7 @@ export default function ProjectSprintsPage() {
       if (!res.ok) throw new Error('Create sprint failed');
       // Optionally: refresh data or revalidate
       await loadPlannedSprints();
+      await loadCompletedSprints();
       setIsCreateSprintDialogOpen(false);
       setNewSprintName('');
       setNewSprintGoal('');
@@ -250,8 +253,52 @@ export default function ProjectSprintsPage() {
     }
   };
 
+  const loadCompletedSprints = async () => {
+    try {
+      setLoadingCompleted(true);
+      const res = await fetch(`/api/projects/${projectId}/sprints`);
+      if (!res.ok) throw new Error('Failed to load sprints');
+      const all: any[] = await res.json();
+      const completed = all
+        .filter(s => s.status === 'completed')
+        .sort((a, b) => new Date(b.endDate || b.updatedAt || b.createdAt).getTime() - new Date(a.endDate || a.updatedAt || a.createdAt).getTime());
+
+      const enriched = await Promise.all(completed.map(async (s) => {
+        try {
+          const tr = await fetch(`/api/tasks?projectId=${projectId}&sprintId=${s.id}`);
+          const tlist: any[] = tr.ok ? await tr.json() : [];
+          const totalPoints = tlist.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+          const completedPoints = tlist.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+          return { ...s, totalPoints, completedPoints };
+        } catch {
+          return { ...s };
+        }
+      }));
+      setCompletedSprints(enriched);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingCompleted(false);
+    }
+  };
+
   useEffect(() => {
-    if (projectId) loadPlannedSprints();
+    if (projectId) {
+      loadPlannedSprints();
+      loadCompletedSprints();
+      (async () => {
+        try {
+          const res = await fetch(`/api/tasks?projectId=${projectId}&sprintId=null`);
+          const all: any[] = res.ok ? await res.json() : [];
+          const backlog = all
+            .filter(t => t.status !== 'done')
+            .map<Task>((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, assignee: t.assignee ? `${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim() : 'Unassigned', storyPoints: t.storyPoints || 0 }));
+          setBacklogTasks(backlog);
+        } catch (e) {
+          console.error(e);
+        }
+      })();
+    }
   }, [projectId]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -389,10 +436,10 @@ export default function ProjectSprintsPage() {
             <Plus className="h-4 w-4" />
             Create Sprint
           </Button>
-          {mockPlannedSprints.length > 0 && (
+          {plannedSprints.length > 0 && (
             <Button 
               onClick={() => {
-                setSelectedSprint(mockPlannedSprints[0]);
+                setSelectedSprint(plannedSprints[0]);
                 setIsStartSprintDialogOpen(true);
               }}
               className="gap-2"
@@ -424,7 +471,7 @@ export default function ProjectSprintsPage() {
 
         {/* Active Sprint Tab */}
         <TabsContent value="active" className="space-y-6">
-          {mockActiveSprint ? (
+          {false ? (
             <>
               {/* Sprint Header */}
               <Card>
@@ -470,14 +517,14 @@ export default function ProjectSprintsPage() {
                 <Play className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">No Active Sprint</h3>
                 <p className="text-muted-foreground mb-4">Start a sprint to begin tracking work</p>
-                {mockPlannedSprints.length > 0 && (
+                {plannedSprints.length > 0 && (
                   <Button 
                     onClick={() => {
-                      setSelectedSprint(mockPlannedSprints[0]);
+                      setSelectedSprint(plannedSprints[0]);
                       setIsStartSprintDialogOpen(true);
                     }}
                   >
-                    Start {mockPlannedSprints[0].name}
+                    Start {plannedSprints[0].name}
                   </Button>
                 )}
               </CardContent>
@@ -497,7 +544,7 @@ export default function ProjectSprintsPage() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-3 max-h-96 overflow-y-auto">
-                {mockBacklogTasks.map((task) => (
+                {backlogTasks.map((task) => (
                   <DraggableTask key={task.id} task={task} />
                 ))}
               </CardContent>
@@ -600,7 +647,7 @@ export default function ProjectSprintsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockCompletedSprints.map((sprint) => (
+                  {completedSprints.map((sprint) => (
                     <TableRow key={sprint.id} className="cursor-pointer hover:bg-accent/50">
                       <TableCell>
                         <div>

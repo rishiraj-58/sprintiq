@@ -12,53 +12,13 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { List, LayoutGrid, ArrowUpDown } from 'lucide-react';
 import { useProject } from '@/stores/hooks/useProject';
+import { useTask } from '@/stores/hooks/useTask';
 
 interface Props {
   projectId: string;
 }
 
-const dummyTasks = [
-  {
-    id: 'PROJ-101',
-    title: 'Implement login page',
-    assignee: { id: 'u1', name: 'Sarah Chen', avatar: null },
-    status: 'in_progress',
-    priority: 'high',
-    dueDate: '2025-02-14',
-  },
-  {
-    id: 'PROJ-102',
-    title: 'Write API docs',
-    assignee: { id: 'u2', name: 'David Kim', avatar: null },
-    status: 'todo',
-    priority: 'medium',
-    dueDate: '2025-02-20',
-  },
-  {
-    id: 'PROJ-103',
-    title: 'Fix navbar flicker',
-    assignee: { id: 'u3', name: 'Alex Thompson', avatar: null },
-    status: 'in_review',
-    priority: 'low',
-    dueDate: null,
-  },
-  {
-    id: 'PROJ-104',
-    title: 'Refactor session middleware',
-    assignee: { id: 'u4', name: 'Emma Davis', avatar: null },
-    status: 'blocked',
-    priority: 'high',
-    dueDate: '2025-02-10',
-  },
-  {
-    id: 'PROJ-105',
-    title: 'Add unit tests for billing',
-    assignee: { id: 'u5', name: 'James Lee', avatar: null },
-    status: 'todo',
-    priority: 'low',
-    dueDate: null,
-  },
-];
+// real data will be fetched via useTask store
 
 export default function MemberTasksPage({ projectId }: Props) {
   const { currentProject } = useProject();
@@ -87,12 +47,18 @@ export default function MemberTasksPage({ projectId }: Props) {
     return map[status] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
+  const { tasks, fetchTasks } = useTask();
+
+  useEffect(() => {
+    if (projectId) fetchTasks(projectId);
+  }, [projectId, fetchTasks]);
+
   const sorted = useMemo(() => {
-    const arr = [...dummyTasks];
+    const arr = [...tasks];
     const toKey = (t: any) => {
       switch (sortBy) {
         case 'title': return t.title.toLowerCase();
-        case 'assignee': return t.assignee?.name?.toLowerCase() || '';
+        case 'assignee': return (t.assignee ? `${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim().toLowerCase() : '');
         case 'status': return t.status;
         case 'priority': return t.priority;
         case 'dueDate': return t.dueDate || '';
@@ -185,10 +151,10 @@ export default function MemberTasksPage({ projectId }: Props) {
                       {t.assignee ? (
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
-                            <AvatarImage src={t.assignee.avatar || undefined} />
-                            <AvatarFallback className="text-xs">{t.assignee.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                            <AvatarImage src={t.assignee.avatarUrl || undefined} />
+                            <AvatarFallback className="text-xs">{`${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim().split(' ').map(n => n[0]).join('')}</AvatarFallback>
                           </Avatar>
-                          <span className="text-sm">{t.assignee.name}</span>
+                          <span className="text-sm">{`${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim() || 'Unknown'}</span>
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">Unassigned</span>
@@ -201,7 +167,7 @@ export default function MemberTasksPage({ projectId }: Props) {
                       <Badge variant="outline" className={priorityBadge(t.priority)}>{t.priority}</Badge>
                     </TableCell>
                     <TableCell>
-                      {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : <span className="text-sm text-muted-foreground">No due date</span>}
+                      {t.dueDate ? new Date(t.dueDate as any).toLocaleDateString() : <span className="text-sm text-muted-foreground">No due date</span>}
                     </TableCell>
                   </TableRow>
                 ))}

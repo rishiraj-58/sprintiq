@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,142 +41,8 @@ import {
   Rocket
 } from 'lucide-react';
 
-// Static timeline data
-const timelineData = {
-  sprints: [
-    {
-      id: 'sprint-1',
-      name: 'Sprint 1 - Foundation',
-      startDate: '2024-01-01',
-      endDate: '2024-01-14',
-      status: 'completed',
-      tasks: 12,
-      completedTasks: 12,
-      storyPoints: 34,
-      completedPoints: 34
-    },
-    {
-      id: 'sprint-2',
-      name: 'Sprint 2 - Core Features',
-      startDate: '2024-01-15',
-      endDate: '2024-01-28',
-      status: 'completed',
-      tasks: 15,
-      completedTasks: 14,
-      storyPoints: 42,
-      completedPoints: 38
-    },
-    {
-      id: 'sprint-3',
-      name: 'Sprint 3 - UI/UX Enhancement',
-      startDate: '2024-01-29',
-      endDate: '2024-02-11',
-      status: 'active',
-      tasks: 18,
-      completedTasks: 8,
-      storyPoints: 48,
-      completedPoints: 22
-    },
-    {
-      id: 'sprint-4',
-      name: 'Sprint 4 - Integration & Testing',
-      startDate: '2024-02-12',
-      endDate: '2024-02-25',
-      status: 'planned',
-      tasks: 14,
-      completedTasks: 0,
-      storyPoints: 36,
-      completedPoints: 0
-    }
-  ],
-
-  milestones: [
-    {
-      id: 'milestone-1',
-      name: 'MVP Release',
-      description: 'Basic functionality ready for internal testing',
-      date: '2024-02-15',
-      status: 'completed',
-      tasks: [
-        { id: 'TASK-001', title: 'User Authentication', status: 'done' },
-        { id: 'TASK-002', title: 'Basic Navigation', status: 'done' },
-        { id: 'TASK-003', title: 'Core Dashboard', status: 'done' }
-      ]
-    },
-    {
-      id: 'milestone-2',
-      name: 'Beta Release',
-      description: 'Feature-complete version ready for beta testing',
-      date: '2024-03-01',
-      status: 'in_progress',
-      tasks: [
-        { id: 'TASK-004', title: 'Advanced Features', status: 'in_progress' },
-        { id: 'TASK-005', title: 'Performance Optimization', status: 'todo' },
-        { id: 'TASK-006', title: 'Bug Fixes', status: 'todo' }
-      ]
-    },
-    {
-      id: 'milestone-3',
-      name: 'Production Release',
-      description: 'Production-ready application with full features',
-      date: '2024-03-31',
-      status: 'planned',
-      tasks: [
-        { id: 'TASK-007', title: 'Final Testing', status: 'todo' },
-        { id: 'TASK-008', title: 'Documentation', status: 'todo' },
-        { id: 'TASK-009', title: 'Deployment Setup', status: 'todo' }
-      ]
-    }
-  ],
-
-  tasks: [
-    {
-      id: 'TASK-001',
-      title: 'User Authentication System',
-      startDate: '2024-01-01',
-      endDate: '2024-01-05',
-      assignee: { name: 'Sarah Chen', avatar: null },
-      status: 'done',
-      dependencies: []
-    },
-    {
-      id: 'TASK-002',
-      title: 'Database Schema Design',
-      startDate: '2024-01-03',
-      endDate: '2024-01-08',
-      assignee: { name: 'Mike Rodriguez', avatar: null },
-      status: 'done',
-      dependencies: []
-    },
-    {
-      id: 'TASK-003',
-      title: 'API Endpoints Development',
-      startDate: '2024-01-06',
-      endDate: '2024-01-15',
-      assignee: { name: 'Alex Thompson', avatar: null },
-      status: 'done',
-      dependencies: ['TASK-001', 'TASK-002']
-    },
-    {
-      id: 'TASK-004',
-      title: 'Frontend UI Components',
-      startDate: '2024-01-16',
-      endDate: '2024-01-25',
-      assignee: { name: 'Emma Davis', avatar: null },
-      status: 'in_progress',
-      dependencies: ['TASK-003']
-    },
-    {
-      id: 'TASK-005',
-      title: 'Integration Testing',
-      startDate: '2024-01-26',
-      endDate: '2024-02-05',
-      assignee: { name: 'David Kim', avatar: null },
-      status: 'todo',
-      dependencies: ['TASK-004']
-    }
-  ]
-};
+// Data containers that will be populated from APIs
+const timelineData = { sprints: [] as any[], milestones: [] as any[], tasks: [] as any[] };
 
 interface TimelinePageProps {
   params: {
@@ -192,6 +58,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
   const projectPerms = usePermissions('project', projectId);
   const canEditTimeline = projectPerms.canManageMembers || projectPerms.canManageSettings; // treat member as read-only
   const [milestonesData, setMilestonesData] = useState<any[]>([]);
+  const [sprintsData, setSprintsData] = useState<any[]>([]);
+  const [tasksData, setTasksData] = useState<any[]>([]);
+  const [releasesData, setReleasesData] = useState<any[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
@@ -211,10 +80,84 @@ export default function TimelinePage({ params }: TimelinePageProps) {
     } catch {}
   };
 
+  const loadSprints = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sprints`);
+      if (!res.ok) return;
+      const sprints = await res.json();
+      setSprintsData(sprints);
+    } catch {}
+  };
+
+  const loadTasks = async () => {
+    try {
+      const res = await fetch(`/api/tasks?projectId=${projectId}`);
+      if (!res.ok) return;
+      const tasks = await res.json();
+      setTasksData(tasks);
+    } catch {}
+  };
+
+  const loadReleases = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/releases`);
+      if (!res.ok) return;
+      setReleasesData(await res.json());
+    } catch {}
+  };
+
   useEffect(() => {
     loadMilestones();
+    loadSprints();
+    loadTasks();
+    loadReleases();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // Derived header stats
+  const activeSprint = useMemo(() => (sprintsData || []).find((s: any) => (s.status || '').toLowerCase() === 'active') || null, [sprintsData]);
+  const activeSprintTotals = useMemo(() => {
+    if (!activeSprint) return { done: 0, total: 0 };
+    const total = (tasksData || []).filter((t: any) => t.sprintId === activeSprint.id).length;
+    const done = (tasksData || []).filter((t: any) => t.sprintId === activeSprint.id && (t.status || '').toLowerCase() === 'done').length;
+    return { done, total };
+  }, [activeSprint, tasksData]);
+
+  const milestoneTotals = useMemo(() => {
+    const list = milestonesData || [];
+    const total = list.length;
+    const completed = list.filter((m: any) => {
+      const s = (m.status || '').toLowerCase();
+      return s === 'completed' || s === 'done';
+    }).length;
+    const upcoming = Math.max(0, total - completed);
+    return { completed, total, upcoming };
+  }, [milestonesData]);
+
+  const timeRemaining = useMemo(() => {
+    const now = new Date();
+    // Prefer milestone named like 'Production' if present
+    const parseDate = (m: any) => (m?.date ? new Date(m.date) : (m?.dueDate ? new Date(m.dueDate) : null));
+    const prod = (milestonesData || []).find((m: any) => typeof m?.name === 'string' && m.name.toLowerCase().includes('production'));
+    let target: Date | null = prod ? parseDate(prod) : null;
+    if (!target) {
+      // fallback: next upcoming milestone by date
+      const futureMilestones = (milestonesData || [])
+        .map((m: any) => ({ m, d: parseDate(m) }))
+        .filter((x: any) => x.d && x.d > now)
+        .sort((a: any, b: any) => (a.d as Date).getTime() - (b.d as Date).getTime());
+      target = futureMilestones.length ? futureMilestones[0].d : null;
+    }
+    const days = target ? Math.max(0, Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const label = prod?.name || (target ? 'next milestone' : '');
+    return { days, label };
+  }, [milestonesData]);
+
+  const overallProgress = useMemo(() => {
+    const total = (tasksData || []).length;
+    const done = (tasksData || []).filter((t: any) => (t.status || '').toLowerCase() === 'done').length;
+    return total ? Math.round((done / total) * 100) : 0;
+  }, [tasksData]);
 
   const openEdit = (m: any) => {
     setEditId(m.id);
@@ -395,9 +338,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                 <Flag className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium">Active Sprint</span>
               </div>
-              <div className="text-2xl font-bold">Sprint 3</div>
+              <div className="text-2xl font-bold">{activeSprint?.name || 'No active sprint'}</div>
               <div className="text-xs text-muted-foreground">
-                8 of 18 tasks completed
+                {activeSprint ? `${activeSprintTotals.done} of ${activeSprintTotals.total} tasks completed` : '—'}
               </div>
             </div>
           </CardContent>
@@ -410,12 +353,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                 <Target className="h-4 w-4 text-green-600" />
                 <span className="text-sm font-medium">Milestones</span>
               </div>
-              <div className="text-2xl font-bold">
-                {timelineData.milestones.filter(m => m.status === 'completed').length}/
-                {timelineData.milestones.length}
-              </div>
+              <div className="text-2xl font-bold">{milestoneTotals.completed}/{milestoneTotals.total}</div>
               <div className="text-xs text-muted-foreground">
-                1 completed, 2 upcoming
+                {milestoneTotals.completed} completed{milestoneTotals.total ? `, ${milestoneTotals.upcoming} upcoming` : ''}
               </div>
             </div>
           </CardContent>
@@ -428,9 +368,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                 <Clock className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-medium">Time Remaining</span>
               </div>
-              <div className="text-2xl font-bold">58 days</div>
+              <div className="text-2xl font-bold">{timeRemaining.days} {timeRemaining.days === 1 ? 'day' : 'days'}</div>
               <div className="text-xs text-muted-foreground">
-                Until production release
+                {timeRemaining.label ? `Until ${timeRemaining.label}` : 'No upcoming milestone'}
               </div>
             </div>
           </CardContent>
@@ -443,8 +383,8 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                 <CheckCircle2 className="h-4 w-4 text-yellow-600" />
                 <span className="text-sm font-medium">Overall Progress</span>
               </div>
-              <div className="text-2xl font-bold">42%</div>
-              <Progress value={42} className="h-2" />
+              <div className="text-2xl font-bold">{overallProgress}%</div>
+              <Progress value={overallProgress} className="h-2" />
             </div>
           </CardContent>
         </Card>
@@ -492,7 +432,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                 </div>
 
                 {/* Sprint Rows */}
-                {timelineData.sprints.map((sprint) => (
+                {(sprintsData || []).map((sprint: any) => (
                   <div key={sprint.id} className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-3">
@@ -502,8 +442,10 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                             <Badge variant="outline" className={getStatusBadgeColor(sprint.status)}>
                               {sprint.status}
                             </Badge>
+                            {/* Calculate tasks per sprint from tasksData */}
                             <span className="text-xs text-muted-foreground">
-                              {sprint.completedTasks}/{sprint.tasks} tasks
+                              {tasksData.filter((t: any) => t.sprintId === sprint.id && t.status === 'done').length}/
+                              {tasksData.filter((t: any) => t.sprintId === sprint.id).length} tasks
                             </span>
                           </div>
                         </div>
@@ -519,7 +461,13 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                           <div className="h-full bg-white bg-opacity-20 rounded overflow-hidden">
                             <div 
                               className="h-full bg-white bg-opacity-40 transition-all duration-300"
-                              style={{ width: `${getProgressPercentage(sprint)}%` }}
+                              style={{ 
+                                width: `${(() => {
+                                  const total = tasksData.filter((t: any) => t.sprintId === sprint.id).length;
+                                  const done = tasksData.filter((t: any) => (t as any).sprintId === sprint.id && (t as any).status === 'done').length;
+                                  return total ? (done / total) * 100 : 0;
+                                })()}%` 
+                              }}
                             />
                           </div>
                         </div>
@@ -528,7 +476,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
 
                     {/* Tasks within Sprint */}
                     <div className="ml-4 space-y-1">
-                      {timelineData.tasks
+                      {tasksData
                         .filter(task => {
                           const taskStart = new Date(task.startDate);
                           const sprintStart = new Date(sprint.startDate);
@@ -543,9 +491,9 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                                 <span className="truncate">{task.title}</span>
                                 {task.assignee && (
                                   <Avatar className="h-4 w-4">
-                                    <AvatarImage src={task.assignee.avatar || undefined} />
+                                    <AvatarImage src={task.assignee.avatarUrl || undefined} />
                                     <AvatarFallback className="text-xs">
-                                      {task.assignee.name.split(' ').map(n => n[0]).join('')}
+                                      {`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim().split(' ').map(n => n[0]).join('')}
                                     </AvatarFallback>
                                   </Avatar>
                                 )}
@@ -573,7 +521,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
         {/* Milestones View */}
         <TabsContent value="milestones" className="space-y-4">
           <div className="grid gap-6">
-            {(milestonesData.length ? milestonesData : timelineData.milestones).map((milestone: any, index: number) => (
+            {(milestonesData || []).map((milestone: any, index: number) => (
               <Card key={milestone.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -656,7 +604,7 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                   {/* Timeline line */}
                   <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
                   
-                  {timelineData.milestones.map((milestone, index) => (
+                   {(milestonesData || []).map((milestone: any, index: number) => (
                     <div key={milestone.id} className="relative flex items-start space-x-4 pb-8">
                       <div className={`w-8 h-8 rounded-full ${getStatusColor(milestone.status)} flex items-center justify-center z-10`}>
                         {milestone.status === 'completed' ? (
@@ -683,17 +631,28 @@ export default function TimelinePage({ params }: TimelinePageProps) {
                           </div>
                         </div>
                         <div className="mt-3">
-                          <Progress 
-                            value={milestone.tasks.filter((t: { status: string }) => t.status === 'done').length / milestone.tasks.length * 100} 
-                            className="h-2" 
-                          />
+                          {(() => {
+                            const total = Array.isArray(milestone.tasks) ? milestone.tasks.length : 0;
+                            const completed = Array.isArray(milestone.tasks)
+                              ? milestone.tasks.filter((t: { status: string }) => t.status === 'done').length
+                              : 0;
+                            const pct = total ? (completed / total) * 100 : 0;
+                            return <Progress value={pct} className="h-2" />;
+                          })()}
                           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                            <span>
-                              {milestone.tasks.filter((t: { status: string }) => t.status === 'done').length} of {milestone.tasks.length} tasks completed
-                            </span>
-                            <span>
-                              {Math.round(milestone.tasks.filter(t => t.status === 'done').length / milestone.tasks.length * 100)}%
-                            </span>
+                            {(() => {
+                              const total = Array.isArray(milestone.tasks) ? milestone.tasks.length : 0;
+                              const completed = Array.isArray(milestone.tasks)
+                                ? milestone.tasks.filter((t: { status: string }) => t.status === 'done').length
+                                : 0;
+                              const pct = total ? Math.round((completed / total) * 100) : 0;
+                              return (
+                                <>
+                                  <span>{completed} of {total} tasks completed</span>
+                                  <span>{pct}%</span>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>

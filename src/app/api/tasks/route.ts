@@ -160,6 +160,8 @@ export async function GET(request: Request) {
         type: tasks.type,
         priority: tasks.priority,
         projectId: tasks.projectId,
+        storyPoints: tasks.storyPoints,
+        sprintId: tasks.sprintId,
         assigneeId: tasks.assigneeId,
         creatorId: tasks.creatorId,
         createdAt: tasks.createdAt,

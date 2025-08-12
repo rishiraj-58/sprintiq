@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,75 +13,18 @@ import { CumulativeFlowChart } from '@/components/charts/CumulativeFlowChart';
 import { CycleTimeChart } from '@/components/charts/CycleTimeChart';
 import { WorkloadDistributionChart } from '@/components/charts/WorkloadDistributionChart';
 
-// Static data for demo
-const mockVelocityData = [
-  { sprintName: 'Sprint 1', completedPoints: 18, totalPoints: 25, sprintNumber: 1 },
-  { sprintName: 'Sprint 2', completedPoints: 22, totalPoints: 24, sprintNumber: 2 },
-  { sprintName: 'Sprint 3', completedPoints: 28, totalPoints: 30, sprintNumber: 3 },
-  { sprintName: 'Sprint 4', completedPoints: 25, totalPoints: 28, sprintNumber: 4 },
-  { sprintName: 'Sprint 5', completedPoints: 32, totalPoints: 35, sprintNumber: 5 },
-  { sprintName: 'Sprint 6', completedPoints: 29, totalPoints: 32, sprintNumber: 6 }
-];
-
-const mockFlowData = [
-  { date: '2024-01-01', backlog: 50, todo: 15, inProgress: 8, done: 25 },
-  { date: '2024-01-03', backlog: 48, todo: 12, inProgress: 10, done: 28 },
-  { date: '2024-01-05', backlog: 45, todo: 14, inProgress: 9, done: 32 },
-  { date: '2024-01-07', backlog: 43, todo: 11, inProgress: 12, done: 35 },
-  { date: '2024-01-09', backlog: 40, todo: 13, inProgress: 8, done: 38 },
-  { date: '2024-01-11', backlog: 38, todo: 10, inProgress: 11, done: 42 },
-  { date: '2024-01-13', backlog: 35, todo: 12, inProgress: 7, done: 45 },
-  { date: '2024-01-15', backlog: 32, todo: 9, inProgress: 10, done: 48 }
-];
-
-const mockCycleTimeData = [
-  { id: 'TASK-001', title: 'User authentication', cycleTime: 3.5, completedDate: '2024-01-10', storyPoints: 5 },
-  { id: 'TASK-002', title: 'Dashboard layout', cycleTime: 2.0, completedDate: '2024-01-11', storyPoints: 3 },
-  { id: 'TASK-003', title: 'API integration', cycleTime: 5.5, completedDate: '2024-01-12', storyPoints: 8 },
-  { id: 'TASK-004', title: 'Bug fix - login', cycleTime: 1.5, completedDate: '2024-01-13', storyPoints: 2 },
-  { id: 'TASK-005', title: 'Payment system', cycleTime: 8.0, completedDate: '2024-01-14', storyPoints: 13 },
-  { id: 'TASK-006', title: 'User profile', cycleTime: 4.0, completedDate: '2024-01-15', storyPoints: 5 },
-  { id: 'TASK-007', title: 'Search feature', cycleTime: 3.0, completedDate: '2024-01-16', storyPoints: 3 }
-];
-
-const mockWorkloadData = [
-  {
-    id: 'user-1',
-    name: 'Sarah Chen',
-    avatar: '',
-    completedTasks: 8,
-    completedPoints: 24,
-    activeTasks: 3,
-    activePoints: 12
-  },
-  {
-    id: 'user-2',
-    name: 'Mike Johnson',
-    avatar: '',
-    completedTasks: 6,
-    completedPoints: 18,
-    activeTasks: 2,
-    activePoints: 8
-  },
-  {
-    id: 'user-3',
-    name: 'Alex Rivera',
-    avatar: '',
-    completedTasks: 5,
-    completedPoints: 15,
-    activeTasks: 4,
-    activePoints: 15
-  },
-  {
-    id: 'user-4',
-    name: 'David Park',
-    avatar: '',
-    completedTasks: 7,
-    completedPoints: 21,
-    activeTasks: 2,
-    activePoints: 6
-  }
-];
+type ApiResponse = {
+  metrics: {
+    averageVelocity: number;
+    averageCycleTimeDays: number;
+    totalPointsDelivered: number;
+    deliveryEfficiencyPercent: number;
+  };
+  velocity: Array<{ sprintId: string; sprintName: string; completedPoints: number; totalPoints: number; startDate: string | null; endDate: string | null }>;
+  cumulativeFlow: Array<{ date: string; backlog: number; todo: number; inProgress: number; done: number }>;
+  workload: Array<{ id: string; name: string; completedTasks: number; completedPoints: number; activeTasks: number; activePoints: number }>;
+  range: { start: string; end: string };
+};
 
 export default function ProjectReportsPage() {
   const params = useParams();
@@ -93,13 +36,54 @@ export default function ProjectReportsPage() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const resolvedRange = useMemo(() => {
+    const end = new Date();
+    let start = new Date();
+    if (dateRange === 'last-7-days') start.setDate(end.getDate() - 6);
+    else if (dateRange === 'last-30-days') start.setDate(end.getDate() - 29);
+    else if (dateRange === 'last-90-days') start.setDate(end.getDate() - 89);
+    else if (dateRange === 'current-quarter') {
+      const month = end.getMonth();
+      const quarterStartMonth = Math.floor(month / 3) * 3;
+      start = new Date(end.getFullYear(), quarterStartMonth, 1);
+    } else if (dateRange === 'custom') {
+      start = customStartDate ? new Date(customStartDate) : start;
+      return { start, end: customEndDate ? new Date(customEndDate) : end };
+    }
+    return { start, end };
+  }, [dateRange, customStartDate, customEndDate]);
+
+  const fetchReports = useCallback(async () => {
+    if (!projectId) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        start: resolvedRange.start.toISOString().slice(0, 10),
+        end: resolvedRange.end.toISOString().slice(0, 10),
+      });
+      const res = await fetch(`/api/projects/${projectId}/reports?${params.toString()}`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const json: ApiResponse = await res.json();
+      setData(json);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load reports');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, resolvedRange.start, resolvedRange.end]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   const handleRefreshData = () => {
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    fetchReports();
   };
 
   const handleExportReports = () => {
@@ -227,19 +211,43 @@ export default function ProjectReportsPage() {
         </CardContent>
       </Card>
 
+      {/* Error banner */}
+      {error && (
+        <div className="p-3 rounded-md bg-red-50 text-red-600 text-sm border border-red-200">{error}</div>
+      )}
+
       {/* Charts Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Velocity Chart */}
-        <VelocityChart sprintData={mockVelocityData} />
+        <VelocityChart
+          sprintData={(data?.velocity ?? []).map((v, idx) => ({
+            sprintName: v.sprintName,
+            completedPoints: v.completedPoints,
+            totalPoints: v.totalPoints,
+            sprintNumber: idx + 1,
+          }))}
+        />
 
         {/* Cumulative Flow Diagram */}
-        <CumulativeFlowChart flowData={mockFlowData} />
+        <CumulativeFlowChart flowData={data?.cumulativeFlow ?? []} />
 
         {/* Cycle Time Chart */}
-        <CycleTimeChart cycleData={mockCycleTimeData} />
+        <CycleTimeChart
+          cycleData={(() => {
+            // For now, we show only the average line derived from metrics and omit points.
+            // Enhance later if per-task cycle breakdown is needed client-side.
+            const avg = data?.metrics.averageCycleTimeDays ?? 0;
+            if (!avg) return [];
+            // Fabricate a simple series to visualize the average reference line.
+            return [
+              { id: 'avg-1', title: 'Average', cycleTime: avg, completedDate: resolvedRange.start.toISOString() },
+              { id: 'avg-2', title: 'Average', cycleTime: avg, completedDate: resolvedRange.end.toISOString() },
+            ];
+          })()}
+        />
 
         {/* Workload Distribution */}
-        <WorkloadDistributionChart workloadData={mockWorkloadData} />
+        <WorkloadDistributionChart workloadData={data?.workload ?? []} />
       </div>
 
       {/* Summary Stats */}
@@ -251,7 +259,7 @@ export default function ProjectReportsPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="text-center p-4 border rounded-lg">
               <div className="text-2xl font-bold text-blue-600">
-                {(mockVelocityData.reduce((sum, s) => sum + s.completedPoints, 0) / mockVelocityData.length).toFixed(1)}
+                {(data?.metrics.averageVelocity ?? 0).toFixed(1)}
               </div>
               <div className="text-sm text-muted-foreground">Average Velocity</div>
               <div className="text-xs text-muted-foreground">points per sprint</div>
@@ -259,7 +267,7 @@ export default function ProjectReportsPage() {
             
             <div className="text-center p-4 border rounded-lg">
               <div className="text-2xl font-bold text-green-600">
-                {(mockCycleTimeData.reduce((sum, t) => sum + t.cycleTime, 0) / mockCycleTimeData.length).toFixed(1)}
+                {(data?.metrics.averageCycleTimeDays ?? 0).toFixed(1)}
               </div>
               <div className="text-sm text-muted-foreground">Average Cycle Time</div>
               <div className="text-xs text-muted-foreground">days per task</div>
@@ -267,7 +275,7 @@ export default function ProjectReportsPage() {
             
             <div className="text-center p-4 border rounded-lg">
               <div className="text-2xl font-bold text-purple-600">
-                {mockWorkloadData.reduce((sum, m) => sum + m.completedPoints, 0)}
+                {data?.metrics.totalPointsDelivered ?? 0}
               </div>
               <div className="text-sm text-muted-foreground">Total Points Delivered</div>
               <div className="text-xs text-muted-foreground">this period</div>
@@ -275,7 +283,7 @@ export default function ProjectReportsPage() {
             
             <div className="text-center p-4 border rounded-lg">
               <div className="text-2xl font-bold text-orange-600">
-                {Math.round((mockVelocityData.reduce((sum, s) => sum + s.completedPoints, 0) / mockVelocityData.reduce((sum, s) => sum + s.totalPoints, 0)) * 100)}%
+                {Math.round((data?.metrics.deliveryEfficiencyPercent ?? 0))}%
               </div>
               <div className="text-sm text-muted-foreground">Delivery Efficiency</div>
               <div className="text-xs text-muted-foreground">completed vs planned</div>

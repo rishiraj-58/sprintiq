@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, text, boolean, integer, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, timestamp, text, boolean, integer, uuid, jsonb } from 'drizzle-orm/pg-core';
 
 // Users/Profiles table (integrated with Clerk)
 export const profiles = pgTable('profiles', {
@@ -315,3 +315,17 @@ export const taskHistory = pgTable('task_history', {
   newValue: text('new_value'),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// Audit Logs
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
+  actorId: varchar('actor_id', { length: 255 }).notNull().references(() => profiles.id),
+  action: varchar('action', { length: 128 }).notNull(),
+  severity: varchar('severity', { length: 16 }).notNull().default('low'),
+  ipAddress: text('ip_address'),
+  details: jsonb('details'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;

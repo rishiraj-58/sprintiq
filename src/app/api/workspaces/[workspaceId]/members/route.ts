@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { workspaceMembers, profiles } from '@/db/schema';
+import { logAuditEvent } from '@/lib/audit';
 import { and, eq } from 'drizzle-orm';
 
 export async function GET(
@@ -76,6 +77,14 @@ export async function POST(
 
     if (existing) {
       await db.update(workspaceMembers).set({ role }).where(eq(workspaceMembers.id, existing.id));
+      await logAuditEvent({
+        workspaceId,
+        actorId: profile.id,
+        action: 'user.role.change',
+        severity: 'medium',
+        ipAddress: (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''),
+        details: { targetProfileId: profileId, newRole: role },
+      });
     }
 
     return new NextResponse(null, { status: 204 });
@@ -108,6 +117,14 @@ export async function DELETE(
     await db
       .delete(workspaceMembers)
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.profileId, profileId)));
+    await logAuditEvent({
+      workspaceId,
+      actorId: profile.id,
+      action: 'user.remove',
+      severity: 'high',
+      ipAddress: (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''),
+      details: { targetProfileId: profileId },
+    });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error('Error removing workspace member:', error);

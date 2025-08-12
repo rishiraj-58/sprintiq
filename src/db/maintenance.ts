@@ -154,6 +154,18 @@ export async function ensureCoreSchema(): Promise<void> {
     created_at timestamp default now(),
     updated_at timestamp default now()
   )`);
+
+  // Ensure audit_logs table exists
+  await db.execute(sql`create table if not exists audit_logs (
+    id uuid primary key default gen_random_uuid(),
+    workspace_id uuid not null references workspaces(id),
+    actor_id varchar(255) not null references profiles(id),
+    action varchar(128) not null,
+    severity varchar(16) not null default 'low',
+    ip_address text,
+    details jsonb,
+    created_at timestamp default now()
+  )`);
 }
 
 

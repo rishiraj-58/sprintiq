@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { projects, workspaceMembers, projectMembers, tasks, comments, taskAttachments, taskSubtasks, taskLinks, taskLabels, taskAuditLogs, taskHistory, milestones, releases, blockers, calendarEvents, policies, capacityWindows, projectPhases, documents, bugs } from '@/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
+import { logAuditEvent } from '@/lib/audit';
 
 // GET - Fetch a specific project
 export async function GET(
@@ -220,6 +221,16 @@ export async function DELETE(
 
       // Delete the project last
       await tx.delete(projects).where(eq(projects.id, projectId));
+    });
+
+    // Log audit event
+    await logAuditEvent({
+      workspaceId: project.workspaceId,
+      actorId: profile.id,
+      action: 'project.delete',
+      severity: 'high',
+      ipAddress: (request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || ''),
+      details: { projectId: project.id, projectName: project.name },
     });
 
     return new NextResponse('Project deleted successfully', { status: 200 });

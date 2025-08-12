@@ -157,7 +157,7 @@ This section covers features at the main workspace dashboard level.
 ### 2.4. Audit Logs
 * **Issue:** Needs complete backend implementation.
 * **To-Do List:**
-    -   [ ] **Schema:** Create an `AuditLog` model in `schema.prisma`.
+    -   [x] **Schema:** Create an `AuditLog` model in `schema.prisma`.
         ```prisma
         model AuditLog {
           id          String   @id @default(uuid())
@@ -172,9 +172,9 @@ This section covers features at the main workspace dashboard level.
           createdAt   DateTime @default(now())
         }
         ```
-    -   [ ] **Backend:** Create a logging service that can be called from anywhere in the backend to create an `AuditLog` entry.
-    -   [ ] **Backend:** Integrate this logging service into all critical actions (deleting a project, changing a role, updating security settings, etc.).
-    -   [ ] **Backend:** Create the API endpoint `GET /api/workspaces/[workspaceId]/audit-logs` with filtering capabilities for action, severity, and date range.
+    -   [x] **Backend:** Create a logging service that can be called from anywhere in the backend to create an `AuditLog` entry.
+    -   [x] **Backend:** Integrate this logging service into all critical actions (deleting a project, changing a role, updating security settings, etc.).
+    -   [x] **Backend:** Create the API endpoint `GET /api/workspaces/[workspaceId]/audit-logs` with filtering capabilities for action, severity, and date range.
     -   [ ] **Frontend:** Wire the Audit Logs page to this API endpoint.
 
 ---

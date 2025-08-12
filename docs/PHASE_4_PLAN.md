@@ -184,11 +184,11 @@ This section covers features at the main workspace dashboard level.
 ### 3.1. User Profile & Notifications
 * **To-Do List:**
     -   [ ] **Feature:** Create a dedicated User Profile page where users can update their name, avatar, and password.
-    -   [ ] **Feature:** Implement a Notification system.
-        -   [ ] **Schema:** Create `Notification` and `UserNotificationPreference` models.
-        -   [ ] **Backend:** Create a notification service to generate notifications (e.g., when a user is mentioned, assigned a task).
-        -   [ ] **Backend:** Create APIs for fetching notifications and updating preferences.
-        -   [ ] **Frontend:** Build a notification center UI (e.g., a dropdown from the main navbar) and a Notification Preferences page in the user's settings.
+    -   [x] **Feature:** Implement a Notification system.
+        -   [x] **Schema:** Create `Notification` and `UserNotificationPreference` models.
+        -   [x] **Backend:** Create a notification service to generate notifications (e.g., when a user is mentioned, assigned a task).
+        -   [x] **Backend:** Create APIs for fetching notifications and updating preferences.
+        -   [x] **Frontend:** Build a notification center UI (e.g., a dropdown from the main navbar) and a Notification Preferences page in the user's settings.
 
 ### 3.2. Billing & Subscriptions
 * **Issue:** This is a major epic that needs to be planned and implemented.

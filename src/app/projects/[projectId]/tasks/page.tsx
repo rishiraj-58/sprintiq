@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import Link from 'next/link';
 import { 
   Plus, 
   Search, 
@@ -468,7 +469,9 @@ export default function TasksPage({ params }: TasksPageProps) {
                     <TableCell className="font-mono text-sm">{task.id}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium">{task.title}</div>
+                        <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                          {task.title}
+                        </Link>
                         <div className="text-sm text-muted-foreground line-clamp-1">
                           {task.description}
                         </div>
@@ -532,9 +535,11 @@ export default function TasksPage({ params }: TasksPageProps) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2">
-                            <Eye className="h-4 w-4" />
-                            View
+                          <DropdownMenuItem className="gap-2" asChild>
+                            <Link href={`/tasks/${task.id}`}>
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2">
                             <Edit className="h-4 w-4" />
@@ -570,33 +575,35 @@ export default function TasksPage({ params }: TasksPageProps) {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {statusTasks.map((task) => (
-                    <Card key={task.id} className="p-3 hover:shadow-md transition-shadow cursor-pointer">
-                      <div className="space-y-2">
-                        <div className="font-medium text-sm">{task.title}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-2">
-                          {task.description}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className={getPriorityBadgeColor(task.priority)}>
-                            {task.priority}
-                          </Badge>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline" className="text-xs">
-                              {task.storyPoints}
-                            </Badge>
-                           {task.assignee && (
-                              <Avatar className="h-5 w-5">
-                               <AvatarImage src={task.assignee.avatarUrl || undefined} />
-                               <AvatarFallback className="text-xs">
-                                 {`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim().split(' ').map((n: string) => n[0]).join('')}
-                               </AvatarFallback>
-                              </Avatar>
-                            )}
+                    <Link key={task.id} href={`/tasks/${task.id}`} className="block">
+                      <Card className="p-3 hover:shadow-md transition-shadow cursor-pointer">
+                        <div className="space-y-2">
+                          <div className="font-medium text-sm">{task.title}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-2">
+                            {task.description}
                           </div>
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline" className={getPriorityBadgeColor(task.priority)}>
+                              {task.priority}
+                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-xs">
+                                {task.storyPoints}
+                              </Badge>
+                             {task.assignee && (
+                                <Avatar className="h-5 w-5">
+                                 <AvatarImage src={task.assignee.avatarUrl || undefined} />
+                                 <AvatarFallback className="text-xs">
+                                   {`${task.assignee.firstName || ''} ${task.assignee.lastName || ''}`.trim().split(' ').map((n: string) => n[0]).join('')}
+                                 </AvatarFallback>
+                                </Avatar>
+                              )}
+                            </div>
+                          </div>
+                          {/* labels omitted; not available on TaskWithAssignee */}
                         </div>
-                        {/* labels omitted; not available on TaskWithAssignee */}
-                      </div>
-                    </Card>
+                      </Card>
+                    </Link>
                   ))}
                 </CardContent>
               </Card>

@@ -64,7 +64,11 @@ export function buildSystemMessage(context: Record<string, unknown>): ChatMessag
   return {
     role: 'system',
     content:
-      'You are SprintIQ MCP-enabled AI assistant. Use provided context to give concise, actionable answers. Prefer structured bullet points. If asked to create tasks/bugs, output a JSON block under a code fence labelled json with fields: type, title, details, priority, assigneeId, labels.' +
+      'You are SprintIQ MCP-enabled AI assistant. Use provided context to give concise, actionable answers. Prefer structured bullet points.\n' +
+      'When creating a task, output a JSON block under a code fence labelled json with: { "tool": "create-task", "args": { "projectId?": "<uuid>", "projectName?": "string", "title": "string", "details?": "string|null", "priority?": "low|medium|high|urgent", "assigneeId?": "<uuid>|null" } }\n' +
+      'Prefer including projectId if known; otherwise include projectName exactly as the user said.\n' +
+      'For updating an existing task, output: { "tool": "update-task", "args": { "taskId": "<uuid>", "title?": "string", "description?": "string|null", "status?": "todo|in_progress|done|blocked", "priority?": "low|medium|high|urgent", "type?": "feature|bug|chore", "assigneeId?": "<uuid>|null", "sprintId?": "<uuid>|null", "dueDate?": "ISO8601|null", "storyPoints?": number|null } }\n' +
+      'Only propose a tool call when confident and include only fields that should change.' +
       `\nContext: ${JSON.stringify(context).slice(0, 6000)}`,
   };
 }

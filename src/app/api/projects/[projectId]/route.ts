@@ -63,7 +63,17 @@ export async function PATCH(
     const profile = await requireAuth();
     const { projectId } = params;
     const body = await request.json();
-    const { name, description, status } = body;
+    const { 
+      name, 
+      description, 
+      status, 
+      visibility, 
+      category, 
+      currency, 
+      startDate, 
+      targetEndDate, 
+      budget 
+    } = body;
 
     if (!projectId) {
       return new NextResponse('Project ID is required', { status: 400 });
@@ -105,6 +115,12 @@ export async function PATCH(
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
+    if (visibility !== undefined) updateData.visibility = visibility;
+    if (category !== undefined) updateData.category = category;
+    if (currency !== undefined) updateData.currency = currency;
+    if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
+    if (targetEndDate !== undefined) updateData.targetEndDate = targetEndDate ? new Date(targetEndDate) : null;
+    if (budget !== undefined) updateData.budget = budget;
     updateData.updatedAt = new Date();
 
     const [updatedProject] = await db

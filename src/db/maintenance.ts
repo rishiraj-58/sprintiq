@@ -46,6 +46,18 @@ export async function ensureProjectMembersTable(): Promise<void> {
 export async function ensureCoreSchema(): Promise<void> {
   await ensureInvitationsProjectIdColumn();
   await ensureProjectMembersTable();
+  // Ensure new project settings columns exist
+  const ensureProjectColumn = async (col: string, ddl: string) => {
+    const hasCol = await columnExists('projects', col);
+    if (!hasCol) {
+      await db.execute(sql.raw(ddl));
+    }
+  };
+  await ensureProjectColumn('visibility', "alter table projects add column if not exists visibility varchar(20) default 'private' not null");
+  await ensureProjectColumn('category', 'alter table projects add column if not exists category varchar(100)');
+  await ensureProjectColumn('currency', "alter table projects add column if not exists currency varchar(10) default 'USD' not null");
+  await ensureProjectColumn('target_end_date', 'alter table projects add column if not exists target_end_date timestamp');
+  await ensureProjectColumn('budget', 'alter table projects add column if not exists budget integer');
   // Ensure tasks.type column exists
   const hasTaskType = await (async () => {
     const result = await db.execute(sql`select count(*)::int as count from information_schema.columns where table_name = 'tasks' and column_name = 'type'`);
@@ -130,6 +142,17 @@ export async function ensureCoreSchema(): Promise<void> {
     start_date timestamp,
     end_date timestamp,
     kind varchar(30) not null default 'code_freeze'
+  )`);
+
+  // Ensure task_statuses table exists for customizable workflows
+  await db.execute(sql`create table if not exists task_statuses (
+    id uuid primary key default gen_random_uuid(),
+    name varchar(100) not null,
+    color varchar(7) not null default '#3B82F6',
+    "order" integer not null default 0,
+    project_id uuid not null references projects(id) on delete cascade,
+    created_at timestamp default now(),
+    updated_at timestamp default now()
   )`);
 }
 

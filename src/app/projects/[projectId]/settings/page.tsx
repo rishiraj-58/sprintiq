@@ -55,17 +55,17 @@ import {
 import { useUser } from '@clerk/nextjs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// Static project settings data
-const projectSettings = {
+// Default project settings structure
+const defaultProjectSettings = {
   general: {
-    name: 'Mobile App Redesign',
-    key: 'MAR',
-    description: 'Complete overhaul of the mobile application user interface with modern design principles and improved user experience.',
-    visibility: 'workspace',
-    category: 'Product',
-    startDate: '2024-01-01',
-    targetEndDate: '2024-03-31',
-    budget: 75000,
+    name: '',
+    key: '',
+    description: '',
+    visibility: 'private',
+    category: '',
+    startDate: '',
+    targetEndDate: '',
+    budget: 0,
     currency: 'USD'
   },
   
@@ -124,69 +124,146 @@ interface SettingsPageProps {
 }
 
 export default function SettingsPage({ params }: SettingsPageProps) {
-  const [settings, setSettings] = useState(projectSettings);
+  const [settings, setSettings] = useState(defaultProjectSettings);
   const [isEditing, setIsEditing] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
   const [newStatusColor, setNewStatusColor] = useState('#3B82F6');
   const [selectedCategory, setSelectedCategory] = useState('todo');
   const { user } = useUser();
   const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [taskStatuses, setTaskStatuses] = useState<any[]>([]);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadWorkspaceRole = async () => {
+    const loadProjectData = async () => {
       try {
-        const res = await fetch(`/api/projects/${params.projectId}/members`, { headers: { 'Cache-Control': 'no-cache' } });
-        if (!res.ok) return;
-        const data = await res.json();
-        const my = (data.workspaceMembers || []).find((m: any) => m.id === user?.id);
-        setWorkspaceRole(my?.role ?? null);
+        setIsLoading(true);
+        
+        // Load project data
+        const projectRes = await fetch(`/api/projects/${params.projectId}`);
+        if (projectRes.ok) {
+          const projectData = await projectRes.json();
+          setSettings(prev => ({
+            ...prev,
+            general: {
+              name: projectData.name || '',
+              key: projectData.key || '',
+              description: projectData.description || '',
+              visibility: projectData.visibility || 'private',
+              category: projectData.category || '',
+              startDate: projectData.startDate ? new Date(projectData.startDate).toISOString().split('T')[0] : '',
+              targetEndDate: projectData.targetEndDate ? new Date(projectData.targetEndDate).toISOString().split('T')[0] : '',
+              budget: projectData.budget || 0,
+              currency: projectData.currency || 'USD'
+            }
+          }));
+        }
+
+        // Load task statuses
+        const statusesRes = await fetch(`/api/projects/${params.projectId}/task-statuses`);
+        if (statusesRes.ok) {
+          const statusesData = await statusesRes.json();
+          setTaskStatuses(statusesData.statuses || []);
+        }
+
+        // Load workspace role
+        const membersRes = await fetch(`/api/projects/${params.projectId}/members`, { headers: { 'Cache-Control': 'no-cache' } });
+        if (membersRes.ok) {
+          const membersData = await membersRes.json();
+          const my = (membersData.workspaceMembers || []).find((m: any) => m.id === user?.id);
+          setWorkspaceRole(my?.role ?? null);
+        }
       } catch (e) {
-        // ignore
+        console.error('Failed to load project data:', e);
+      } finally {
+        setIsLoading(false);
       }
     };
+    
     if (user?.id && params.projectId) {
-      loadWorkspaceRole();
+      loadProjectData();
     }
   }, [user?.id, params.projectId]);
 
-  const handleSaveGeneral = () => {
-    // Save general settings logic
-    console.log('Saving general settings:', settings.general);
-    setIsEditing(false);
+  const handleSaveGeneral = async () => {
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: settings.general.name,
+          description: settings.general.description,
+          visibility: settings.general.visibility,
+          category: settings.general.category,
+          currency: settings.general.currency,
+          startDate: settings.general.startDate ? new Date(settings.general.startDate).toISOString() : null,
+          targetEndDate: settings.general.targetEndDate ? new Date(settings.general.targetEndDate).toISOString() : null,
+          budget: settings.general.budget || null,
+        }),
+      });
+
+      if (response.ok) {
+        setIsEditing(false);
+        setSaveMessage('Settings saved successfully!');
+        setTimeout(() => setSaveMessage(null), 3000);
+        console.log('Settings saved successfully');
+      } else {
+        setSaveMessage('Failed to save settings');
+        setTimeout(() => setSaveMessage(null), 3000);
+        console.error('Failed to save settings');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
   };
 
-  const handleAddStatus = () => {
+  const handleAddStatus = async () => {
     if (!newStatusName.trim()) return;
     
-    const newStatus = {
-      id: Date.now().toString(),
-      name: newStatusName,
-      color: newStatusColor,
-      order: settings.workflow.statuses.length + 1,
-      category: selectedCategory
-    };
-    
-    setSettings(prev => ({
-      ...prev,
-      workflow: {
-        ...prev.workflow,
-        statuses: [...prev.workflow.statuses, newStatus]
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/task-statuses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newStatusName,
+          color: newStatusColor,
+          order: taskStatuses.length + 1,
+        }),
+      });
+
+      if (response.ok) {
+        const newStatus = await response.json();
+        setTaskStatuses(prev => [...prev, newStatus.status]);
+        setNewStatusName('');
+        setNewStatusColor('#3B82F6');
+        setSelectedCategory('todo');
+      } else {
+        console.error('Failed to add status');
       }
-    }));
-    
-    setNewStatusName('');
-    setNewStatusColor('#3B82F6');
-    setSelectedCategory('todo');
+    } catch (error) {
+      console.error('Error adding status:', error);
+    }
   };
 
-  const handleRemoveStatus = (statusId: string) => {
-    setSettings(prev => ({
-      ...prev,
-      workflow: {
-        ...prev.workflow,
-        statuses: prev.workflow.statuses.filter(s => s.id !== statusId)
+  const handleRemoveStatus = async (statusId: string) => {
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/task-statuses/${statusId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setTaskStatuses(prev => prev.filter(s => s.id !== statusId));
+      } else {
+        console.error('Failed to remove status');
       }
-    }));
+    } catch (error) {
+      console.error('Error removing status:', error);
+    }
   };
 
   const handleArchiveProject = () => {
@@ -217,6 +294,19 @@ export default function SettingsPage({ params }: SettingsPageProps) {
     }));
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading project settings...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -227,10 +317,21 @@ export default function SettingsPage({ params }: SettingsPageProps) {
             Configure project details, workflows, and permissions
           </p>
         </div>
-        <Button onClick={handleSaveGeneral} disabled={!isEditing} className="gap-2">
-          <Save className="h-4 w-4" />
-          Save Changes
-        </Button>
+        <div className="flex items-center gap-4">
+          {saveMessage && (
+            <div className={`px-3 py-2 rounded-md text-sm ${
+              saveMessage.includes('successfully') 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-red-100 text-red-800'
+            }`}>
+              {saveMessage}
+            </div>
+          )}
+          <Button onClick={handleSaveGeneral} disabled={!isEditing} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save Changes
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
@@ -445,34 +546,61 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4">
-                {settings.workflow.statuses.map((status) => (
-                  <div key={status.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full" 
-                        style={{ backgroundColor: status.color }}
-                      />
-                      <span className="font-medium">{status.name}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {status.category.replace('_', ' ')}
-                      </Badge>
+              {taskStatuses.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">No task statuses configured yet</p>
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/projects/${params.projectId}/task-statuses/seed`, {
+                          method: 'POST',
+                        });
+                        if (response.ok) {
+                          const data = await response.json();
+                          setTaskStatuses(data.statuses);
+                        }
+                      } catch (error) {
+                        console.error('Error seeding statuses:', error);
+                      }
+                    }}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Default Statuses
+                  </Button>
+                </div>
+              )}
+              
+              {taskStatuses.length > 0 && (
+                <div className="grid gap-4">
+                  {taskStatuses.map((status) => (
+                    <div key={status.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full" 
+                          style={{ backgroundColor: status.color }}
+                        />
+                        <span className="font-medium">{status.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          Order: {status.order}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleRemoveStatus(status.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleRemoveStatus(status.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               <div className="border-t pt-4">
                 <div className="flex gap-2">

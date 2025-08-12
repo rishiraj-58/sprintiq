@@ -62,10 +62,13 @@ export function Navbar() {
   }, [workspaces, wsQuery]);
 
   const filteredProjects = useMemo(() => {
+    console.log('Filtering projects:', { projects: projects.length, projQuery, projects });
     const list = projQuery
       ? projects.filter((p) => p.name.toLowerCase().includes(projQuery.toLowerCase()))
       : projects.slice(0, 8);
-    return list.map((p) => ({ id: p.id, name: p.name }));
+    const result = list.map((p) => ({ id: p.id, name: p.name }));
+    console.log('Filtered projects result:', result);
+    return result;
   }, [projects, projQuery]);
 
   // Local dropdown open states
@@ -122,7 +125,9 @@ export function Navbar() {
                     onClick={async () => {
                       setCurrentWorkspace(w);
                       localStorage.setItem("siq:lastWorkspaceId", w.id);
+                      console.log('Fetching projects for workspace:', w.id, w.name);
                       await fetchProjects(w.id);
+                      console.log('Projects after fetch:', projects);
                       router.push(`/dashboard/workspace/${w.id}`);
                       setWsOpen(false);
                     }}

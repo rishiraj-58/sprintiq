@@ -64,7 +64,23 @@ export const projects = pgTable('projects', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   startDate: timestamp('start_date'),
-  dueDate: timestamp('due_date')
+  dueDate: timestamp('due_date'),
+  visibility: varchar('visibility', { length: 20 }).notNull().default('private'),
+  category: varchar('category', { length: 100 }),
+  currency: varchar('currency', { length: 10 }).notNull().default('USD'),
+  targetEndDate: timestamp('target_end_date'),
+  budget: integer('budget')
+});
+
+// Task Statuses (customizable workflows)
+export const taskStatuses = pgTable('task_statuses', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  color: varchar('color', { length: 7 }).notNull().default('#3B82F6'),
+  order: integer('order').notNull().default(0),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export type Project = typeof projects.$inferSelect;
@@ -76,6 +92,7 @@ export type TaskLink = typeof taskLinks.$inferSelect;
 export type TaskLabel = typeof taskLabels.$inferSelect;
 export type TaskAuditLog = typeof taskAuditLogs.$inferSelect;
 export type TaskHistory = typeof taskHistory.$inferSelect;
+export type TaskStatus = typeof taskStatuses.$inferSelect;
 
 // Tasks
 export const tasks = pgTable('tasks', {

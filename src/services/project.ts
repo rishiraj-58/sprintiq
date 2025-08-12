@@ -11,10 +11,13 @@ interface ProjectCreate {
 
 export const projectService = {
   fetchProjects: async (workspaceId: string) => {
-    return await db
+    console.log('Project service: fetching projects for workspace:', workspaceId);
+    const result = await db
       .select()
       .from(projects)
       .where(eq(projects.workspaceId, workspaceId));
+    console.log('Project service: found', result.length, 'projects');
+    return result;
   },
 
   createProject: async (data: ProjectCreate) => {

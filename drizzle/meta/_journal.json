@@ -8,6 +8,13 @@
       "when": 1754568066658,
       "tag": "0000_wise_xavin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1754988419145,
+      "tag": "0001_tiny_inertia",
+      "breakpoints": true
     }
   ]
 }

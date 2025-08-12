@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { projectService } from '@/services/project';
 import { db } from '@/db';
+import { ensureCoreSchema } from '@/db/maintenance';
 import { workspaceMembers, projects as projectsTable, projectMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm'; 
 
 // Handler to get projects for a specific workspace
 export async function GET(req: Request) {
   try {
+    // Ensure schema (adds new project settings columns if missing)
+    await ensureCoreSchema();
+
     const profile = await requireAuth();
     const { searchParams } = new URL(req.url);
     const workspaceId = searchParams.get('workspaceId');
@@ -35,16 +39,20 @@ export async function GET(req: Request) {
     
     // If assignedToMe=true, only return projects where the user is a direct project member
     if (assignedToMe) {
+      console.log('Fetching assigned projects for user:', profile.id, 'in workspace:', workspaceId);
       const rows = await db
         .select({ project: projectsTable })
         .from(projectsTable)
         .innerJoin(projectMembers, eq(projectMembers.projectId, projectsTable.id))
         .where(and(eq(projectsTable.workspaceId, workspaceId), eq(projectMembers.profileId, profile.id)));
       const onlyMine = rows.map((r) => r.project);
+      console.log('Assigned projects found:', onlyMine.length);
       return NextResponse.json(onlyMine);
     }
 
+    console.log('Fetching all projects for workspace:', workspaceId);
     const projects = await projectService.fetchProjects(workspaceId);
+    console.log('Projects found:', projects.length);
     return NextResponse.json(projects);
 
   } catch (error) {

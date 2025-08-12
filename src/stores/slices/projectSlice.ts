@@ -37,6 +37,8 @@ export const createProjectSlice: StateCreator<ProjectState> = (set, get) => ({
     if (!workspaceId) return;
     try {
       set({ isLoading: true, error: null });
+      console.log('fetchProjects called with workspaceId:', workspaceId);
+      
       // Determine if we should filter by assigned projects for member role
       const role = (() => {
         // Lightweight role resolution based on capabilities stored elsewhere could be added; default no filter
@@ -55,12 +57,17 @@ export const createProjectSlice: StateCreator<ProjectState> = (set, get) => ({
 
       const query = new URLSearchParams({ workspaceId });
       if (role === 'member') query.set('assignedToMe', 'true');
-      const response = await fetch(`/api/projects?${query.toString()}`);
+      const url = `/api/projects?${query.toString()}`;
+      console.log('Fetching projects from:', url);
+      
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch projects');
       }
       const results = await response.json();
+      console.log('Projects API response:', results);
       set({ projects: results, isLoading: false });
+      console.log('Projects state updated:', results);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       set({ error: errorMessage, isLoading: false });

@@ -1,87 +1,65 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { type RoleCapability } from '@/types/database';
+
+// Module-scoped caches to dedupe calls across all component instances
+const globalCapabilitiesCache = new Map<string, RoleCapability[]>();
+const globalInFlight = new Map<string, Promise<RoleCapability[]>>();
 
 export const usePermissions = (contextType: 'workspace' | 'project', contextId?: string) => {
   const { user } = useUser();
   const [capabilities, setCapabilities] = useState<RoleCapability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const lastKeyRef = useRef<string | null>(null);
-  const inFlightRef = useRef<AbortController | null>(null);
-  const cacheRef = useRef<Map<string, RoleCapability[]>>(new Map());
+  const key = useMemo(() => (user?.id && contextId ? `${user.id}:${contextType}:${contextId}` : null), [user?.id, contextType, contextId]);
 
-  console.log('usePermissions hook - state:', { 
-    userId: user?.id, 
-    contextId, 
-    contextType, 
-    capabilities,
-    isLoading 
-  });
-
-
-    useEffect(() => {
-    console.log('usePermissions useEffect triggered:', { userId: user?.id, contextId });
-    
-    const fetchCapabilities = async () => {
-      if (user?.id && contextId) {
-        const key = `${user.id}:${contextType}:${contextId}`;
-
-        // If we already fetched for the same key, return cached to avoid spam
-        if (cacheRef.current.has(key)) {
-          setCapabilities(cacheRef.current.get(key) || []);
-          setIsLoading(false);
-          return;
-        }
-
-        // If the same request is in-flight, skip
-        if (lastKeyRef.current === key && inFlightRef.current) {
-          return;
-        }
-
-        lastKeyRef.current = key;
-        inFlightRef.current?.abort();
-        const controller = new AbortController();
-        inFlightRef.current = controller;
-
-        console.log('usePermissions: Making API call to /api/permissions');
-        setIsLoading(true);
-        try {
-          // Fetch from the API instead of calling PermissionManager directly
-          const response = await fetch(`/api/permissions?contextId=${contextId}&contextType=${contextType}`, {
-            signal: controller.signal,
-            // Deduplicate requests at the browser layer
-            headers: { 'Cache-Control': 'no-cache' },
-          });
-          console.log('usePermissions: API response status:', response.status);
-          if (response.ok) {
-            const data = await response.json();
-            console.log('usePermissions: Received capabilities:', data.capabilities);
-            const caps = data.capabilities || [];
-            cacheRef.current.set(key, caps);
-            setCapabilities(caps);
-          } else {
-            console.log('usePermissions: API failed');
-            setCapabilities([]);
-          }
-        } catch (error) {
-          console.error("Failed to fetch permissions", error);
-          setCapabilities([]);
-        } finally {
-          setIsLoading(false);
-          inFlightRef.current = null;
-        }
-      } else {
-        console.log('usePermissions: Not fetching - missing data');
-        setIsLoading(false);
-      }
-    };
-
-    // Only fetch if we have the required data
-    if (user?.id && contextId) {
-      console.log('usePermissions: Calling fetchCapabilities');
-      fetchCapabilities();
+  useEffect(() => {
+    if (!key) {
+      setIsLoading(false);
+      return;
     }
-  }, [user?.id, contextId, contextType]);
+
+    // Serve immediately from global cache if available
+    if (globalCapabilitiesCache.has(key)) {
+      setCapabilities(globalCapabilitiesCache.get(key) || []);
+      setIsLoading(false);
+      return;
+    }
+
+    // If a global request is already in-flight for this key, attach to it
+    const inFlight = globalInFlight.get(key);
+    if (inFlight) {
+      setIsLoading(true);
+      inFlight
+        .then((caps) => setCapabilities(caps))
+        .finally(() => setIsLoading(false));
+      return;
+    }
+
+    // Launch a single global request for this key
+    const fetchPromise = (async (): Promise<RoleCapability[]> => {
+      const response = await fetch(`/api/permissions?contextId=${contextId}&contextType=${contextType}`, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const caps: RoleCapability[] = data.capabilities || [];
+      globalCapabilitiesCache.set(key, caps);
+      return caps;
+    })();
+
+    globalInFlight.set(key, fetchPromise);
+    setIsLoading(true);
+    fetchPromise
+      .then((caps) => setCapabilities(caps))
+      .catch(() => setCapabilities([]))
+      .finally(() => {
+        setIsLoading(false);
+        // Clear in-flight once settled
+        if (globalInFlight.get(key) === fetchPromise) {
+          globalInFlight.delete(key);
+        }
+      });
+  }, [key, contextId, contextType]);
 
   return {
     isLoading,

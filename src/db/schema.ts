@@ -1,4 +1,5 @@
 import { pgTable, varchar, timestamp, text, boolean, integer, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 // Users/Profiles table (integrated with Clerk)
 export const profiles = pgTable('profiles', {
@@ -329,3 +330,54 @@ export const auditLogs = pgTable('audit_logs', {
 });
 
 export type AuditLog = typeof auditLogs.$inferSelect;
+
+// Notifications
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  recipientId: varchar('recipient_id', { length: 255 }).notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  actorId: varchar('actor_id', { length: 255 }).references(() => profiles.id, { onDelete: 'set null' }),
+  type: varchar('type', { length: 32 }).notNull(),
+  content: text('content').notNull(),
+  isRead: boolean('is_read').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  recipient: one(profiles, {
+    fields: [notifications.recipientId],
+    references: [profiles.id],
+  }),
+  actor: one(profiles, {
+    fields: [notifications.actorId],
+    references: [profiles.id],
+  }),
+  project: one(projects, {
+    fields: [notifications.projectId],
+    references: [projects.id],
+  }),
+  task: one(tasks, {
+    fields: [notifications.taskId],
+    references: [tasks.id],
+  }),
+}));
+
+export type NotificationRow = typeof notifications.$inferSelect;
+
+// User Notification Preferences
+export const userNotificationPreferences = pgTable('user_notification_preferences', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  mention: boolean('mention').notNull().default(true),
+  taskAssigned: boolean('task_assigned').notNull().default(true),
+  statusUpdate: boolean('status_update').notNull().default(false),
+  commentAdded: boolean('comment_added').notNull().default(true),
+});
+
+export const userNotificationPreferencesRelations = relations(userNotificationPreferences, ({ one }) => ({
+  user: one(profiles, {
+    fields: [userNotificationPreferences.userId],
+    references: [profiles.id],
+  }),
+}));

@@ -4,12 +4,15 @@ import { db } from '@/db';
 import { comments, tasks, projects, workspaceMembers, profiles } from '@/db/schema';
 import { and, eq, desc } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
+import { ensureCoreSchema } from '@/db/maintenance';
+import { NotificationService } from '@/services/notification';
 
 export async function POST(
   request: Request,
   { params }: { params: { taskId: string } }
 ) {
   try {
+    await ensureCoreSchema();
     const profile = await requireAuth();
     const { taskId } = params;
     const { content } = await request.json();
@@ -83,6 +86,58 @@ export async function POST(
       .from(comments)
       .innerJoin(profiles, eq(comments.authorId, profiles.id))
       .where(eq(comments.id, newComment.id));
+
+    // Detect @mentions and notify mentioned users who are members of the workspace
+    // Supported patterns: @email@example.com, @First, @First Last
+    try {
+      const emailMatches = content.match(/@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g) || [];
+      const nameMatches = content.match(/@([A-Za-z][A-Za-z\-'.]+(?:\s+[A-Za-z][A-Za-z\-'.]+)?)/g) || [];
+      const mentionTokens = new Set<string>();
+      for (const m of emailMatches) mentionTokens.add(m.slice(1).toLowerCase());
+      for (const m of nameMatches) mentionTokens.add(m.slice(1).trim());
+
+      if (mentionTokens.size > 0) {
+        // Load all workspace members with profile info
+        const members = await db
+          .select({ id: profiles.id, email: profiles.email, firstName: profiles.firstName, lastName: profiles.lastName })
+          .from(workspaceMembers)
+          .innerJoin(profiles, eq(workspaceMembers.profileId, profiles.id))
+          .where(eq(workspaceMembers.workspaceId, task.workspaceId));
+
+        const norm = (s: string | null | undefined) => (s || '').trim().toLowerCase();
+        const recipients = new Set<string>();
+        for (const token of mentionTokens) {
+          const tokenLc = token.toLowerCase();
+          for (const m of members) {
+            const mEmail = norm(m.email);
+            const mFirst = norm(m.firstName);
+            const mLast = norm(m.lastName);
+            const mFull = [mFirst, mLast].filter(Boolean).join(' ').trim();
+            if (
+              (mEmail && tokenLc === mEmail) ||
+              (mFull && tokenLc === mFull) ||
+              (mFirst && tokenLc === mFirst)
+            ) {
+              if (m.id && m.id !== profile.id) recipients.add(m.id);
+            }
+          }
+        }
+
+        const authorName = [commentWithAuthor.author.firstName, commentWithAuthor.author.lastName].filter(Boolean).join(' ') || 'Someone';
+        for (const rid of recipients) {
+          await NotificationService.createNotification({
+            recipientId: rid,
+            actorId: profile.id,
+            type: 'mention',
+            content: `${authorName} mentioned you in a comment`,
+            projectId: task.projectId,
+            taskId: task.id,
+          });
+        }
+      }
+    } catch (e) {
+      console.error('mention notify error', e);
+    }
 
     return NextResponse.json(commentWithAuthor, { status: 201 });
 

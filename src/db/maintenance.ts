@@ -166,6 +166,29 @@ export async function ensureCoreSchema(): Promise<void> {
     details jsonb,
     created_at timestamp default now()
   )`);
+
+  // Ensure notifications table exists
+  await db.execute(sql`create table if not exists notifications (
+    id uuid primary key default gen_random_uuid(),
+    recipient_id varchar(255) not null references profiles(id) on delete cascade,
+    actor_id varchar(255) references profiles(id) on delete set null,
+    type varchar(32) not null,
+    content text not null,
+    is_read boolean not null default false,
+    created_at timestamp not null default now(),
+    project_id uuid references projects(id) on delete cascade,
+    task_id uuid references tasks(id) on delete cascade
+  )`);
+
+  // Ensure user_notification_preferences table exists
+  await db.execute(sql`create table if not exists user_notification_preferences (
+    id uuid primary key default gen_random_uuid(),
+    user_id varchar(255) not null references profiles(id) on delete cascade,
+    mention boolean not null default true,
+    task_assigned boolean not null default true,
+    status_update boolean not null default false,
+    comment_added boolean not null default true
+  )`);
 }
 
 

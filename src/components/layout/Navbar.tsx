@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronsUpDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/hooks/usePermissions";
+import { NotificationIcon } from "@/components/notifications/NotificationIcon";
 
 export function Navbar() {
   const router = useRouter();
@@ -104,7 +105,7 @@ export function Navbar() {
   }, [workspaces, wsQuery]);
 
   const filteredProjects = useMemo(() => {
-    console.log('Filtering projects:', { projects: projects.length, projQuery, projects });
+    console.log('Filtering projects:', { projectsCount: projects.length, projQuery, projects });
     const list = projQuery
       ? projects.filter((p) => p.name.toLowerCase().includes(projQuery.toLowerCase()))
       : projects.slice(0, 8);
@@ -292,6 +293,7 @@ export function Navbar() {
             </Link>
           </SignedOut>
           <SignedIn>
+            <NotificationIcon />
             <UserButton 
               afterSignOutUrl="/"
               afterMultiSessionSingleSignOutUrl="/"

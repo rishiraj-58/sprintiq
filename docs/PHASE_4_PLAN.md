@@ -85,7 +85,7 @@ This section covers features and fixes within the scope of a single project.
 ### 1.4. Project Settings
 * **Issue:** The settings page has UI but no backend logic.
 * **To-Do List:**
-    -   [ ] **Schema:** Enhance the `Project` model in `schema.prisma`.
+    -   [x] **Schema:** Enhance the `Project` model in `schema.prisma`.
         ```prisma
         model Project {
           // ... existing fields
@@ -97,7 +97,7 @@ This section covers features and fixes within the scope of a single project.
           budget      Float?
         }
         ```
-    -   [ ] **Schema:** Create a `TaskStatus` model for customizable workflows.
+    -   [x] **Schema:** Create a `TaskStatus` model for customizable workflows.
         ```prisma
         model TaskStatus {
             id          String   @id @default(uuid())
@@ -108,9 +108,9 @@ This section covers features and fixes within the scope of a single project.
             project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
         }
         ```
-    -   [ ] **Backend:** Implement a `PATCH /api/projects/[projectId]` endpoint that allows updating these new project settings fields.
-    -   [ ] **Backend:** Create full CRUD API endpoints for `TaskStatus` (`/api/projects/[projectId]/task-statuses`).
-    -   [ ] **Frontend:** Wire up the input fields on the Settings page to their respective API endpoints.
+    -   [x] **Backend:** Implement a `PATCH /api/projects/[projectId]` endpoint that allows updating these new project settings fields.
+    -   [x] **Backend:** Create full CRUD API endpoints for `TaskStatus` (`/api/projects/[projectId]/task-statuses`).
+    -   [x] **Frontend:** Wire up the input fields on the Settings page to their respective API endpoints.
 
 ---
 

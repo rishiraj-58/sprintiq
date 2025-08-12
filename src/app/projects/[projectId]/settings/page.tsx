@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +125,7 @@ interface SettingsPageProps {
 }
 
 export default function SettingsPage({ params }: SettingsPageProps) {
+  const router = useRouter();
   const [settings, setSettings] = useState(defaultProjectSettings);
   const [isEditing, setIsEditing] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
@@ -134,6 +136,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [taskStatuses, setTaskStatuses] = useState<any[]>([]);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [projectStatus, setProjectStatus] = useState<'active' | 'planning' | 'completed' | 'archived'>('active');
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -158,6 +161,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               currency: projectData.currency || 'USD'
             }
           }));
+          setProjectStatus((projectData.status || 'active') as any);
         }
 
         // Load task statuses
@@ -185,6 +189,16 @@ export default function SettingsPage({ params }: SettingsPageProps) {
       loadProjectData();
     }
   }, [user?.id, params.projectId]);
+
+  const refreshProjectStatus = async () => {
+    try {
+      const projectRes = await fetch(`/api/projects/${params.projectId}`, { headers: { 'Cache-Control': 'no-cache' } });
+      if (projectRes.ok) {
+        const projectData = await projectRes.json();
+        setProjectStatus((projectData.status || 'active') as any);
+      }
+    } catch {}
+  };
 
   const handleSaveGeneral = async () => {
     try {
@@ -266,12 +280,64 @@ export default function SettingsPage({ params }: SettingsPageProps) {
     }
   };
 
-  const handleArchiveProject = () => {
-    console.log('Archiving project:', params.projectId);
+  const handleArchiveProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${params.projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+      if (res.ok) {
+        setSaveMessage('Project archived successfully');
+        setTimeout(() => setSaveMessage(null), 3000);
+        setProjectStatus('archived');
+        refreshProjectStatus();
+      } else {
+        setSaveMessage('Failed to archive project');
+        setTimeout(() => setSaveMessage(null), 3000);
+      }
+    } catch (e) {
+      setSaveMessage('Failed to archive project');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
   };
 
-  const handleDeleteProject = () => {
-    console.log('Deleting project:', params.projectId);
+  const handleUnarchiveProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${params.projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' }),
+      });
+      if (res.ok) {
+        setSaveMessage('Project unarchived successfully');
+        setTimeout(() => setSaveMessage(null), 3000);
+        setProjectStatus('active');
+        refreshProjectStatus();
+      } else {
+        setSaveMessage('Failed to unarchive project');
+        setTimeout(() => setSaveMessage(null), 3000);
+      }
+    } catch (e) {
+      setSaveMessage('Failed to unarchive project');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${params.projectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        // Redirect to projects listing after deletion
+        router.push('/projects');
+      } else {
+        setSaveMessage('Failed to delete project');
+        setTimeout(() => setSaveMessage(null), 3000);
+      }
+    } catch (e) {
+      setSaveMessage('Failed to delete project');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
   };
 
   const handleNotificationChange = (key: string, value: any) => {
@@ -892,32 +958,31 @@ export default function SettingsPage({ params }: SettingsPageProps) {
                 <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-medium text-orange-900">Archive Project</h4>
+                      <h4 className="font-medium text-orange-900">{projectStatus === 'archived' ? 'Unarchive Project' : 'Archive Project'}</h4>
                       <p className="text-sm text-orange-700 mt-1">
-                        Archive this project to hide it from active project lists. 
-                        Archived projects can be restored later.
+                        {projectStatus === 'archived' ? 'Restore this project to active lists.' : 'Archive this project to hide it from active lists. Archived projects can be restored later.'}
                       </p>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-100">
                           <Archive className="h-4 w-4 mr-2" />
-                          Archive
+                          {projectStatus === 'archived' ? 'Unarchive' : 'Archive'}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Archive Project</AlertDialogTitle>
+                          <AlertDialogTitle>{projectStatus === 'archived' ? 'Unarchive Project' : 'Archive Project'}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to archive "{settings.general.name}"? 
-                            This will hide the project from active lists, but all data will be preserved 
-                            and the project can be restored later.
+                            {projectStatus === 'archived'
+                              ? `Are you sure you want to unarchive "${settings.general.name}"? It will appear back in active lists.`
+                              : `Are you sure you want to archive "${settings.general.name}"? This will hide the project from active lists, but all data will be preserved and the project can be restored later.`}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleArchiveProject} className="bg-orange-600 hover:bg-orange-700">
-                            Archive Project
+                          <AlertDialogAction onClick={projectStatus === 'archived' ? handleUnarchiveProject : handleArchiveProject} className="bg-orange-600 hover:bg-orange-700">
+                            {projectStatus === 'archived' ? 'Unarchive Project' : 'Archive Project'}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>

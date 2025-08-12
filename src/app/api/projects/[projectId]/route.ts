@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
-import { projects, workspaceMembers } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { projects, workspaceMembers, projectMembers, tasks, comments, taskAttachments, taskSubtasks, taskLinks, taskLabels, taskAuditLogs, taskHistory, milestones, releases, blockers, calendarEvents, policies, capacityWindows, projectPhases, documents, bugs } from '@/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { PermissionManager } from '@/lib/permissions';
 
 // GET - Fetch a specific project
@@ -184,10 +184,43 @@ export async function DELETE(
       return new NextResponse('Forbidden: You do not have permission to delete this project', { status: 403 });
     }
 
-    // Delete the project
-    await db
-      .delete(projects)
-      .where(eq(projects.id, projectId));
+    // Delete related data in a transaction to satisfy FK constraints
+    await db.transaction(async (tx) => {
+      // Gather task IDs for this project
+      const taskIdRows = await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.projectId, projectId));
+      const taskIds = taskIdRows.map((t) => t.id);
+
+      if (taskIds.length > 0) {
+        // Delete task-scoped tables first (some have cascade, but we ensure cleanup)
+        await tx.delete(comments).where(inArray(comments.taskId, taskIds));
+        await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIds));
+        await tx.delete(taskSubtasks).where(inArray(taskSubtasks.taskId, taskIds));
+        await tx.delete(taskLinks).where(inArray(taskLinks.taskId, taskIds));
+        await tx.delete(taskLabels).where(inArray(taskLabels.taskId, taskIds));
+        await tx.delete(taskAuditLogs).where(inArray(taskAuditLogs.taskId, taskIds));
+        await tx.delete(taskHistory).where(inArray(taskHistory.taskId, taskIds));
+        // Finally, delete tasks
+        await tx.delete(tasks).where(eq(tasks.projectId, projectId));
+      }
+
+      // Delete project-level related records
+      await tx.delete(milestones).where(eq(milestones.projectId, projectId));
+      await tx.delete(releases).where(eq(releases.projectId, projectId));
+      await tx.delete(blockers).where(eq(blockers.projectId, projectId));
+      await tx.delete(calendarEvents).where(eq(calendarEvents.projectId, projectId));
+      await tx.delete(policies).where(eq(policies.projectId, projectId));
+      await tx.delete(capacityWindows).where(eq(capacityWindows.projectId, projectId));
+      await tx.delete(projectPhases).where(eq(projectPhases.projectId, projectId));
+      await tx.delete(documents).where(eq(documents.projectId, projectId));
+      await tx.delete(bugs).where(eq(bugs.projectId, projectId));
+      await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+
+      // Delete the project last
+      await tx.delete(projects).where(eq(projects.id, projectId));
+    });
 
     return new NextResponse('Project deleted successfully', { status: 200 });
 

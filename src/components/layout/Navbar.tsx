@@ -5,13 +5,14 @@ import { UserButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/stores/hooks/useWorkspace";
 import { useProject } from "@/stores/hooks/useProject";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronsUpDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/hooks/usePermissions";
 
 export function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { workspaces, currentWorkspace, fetchWorkspaces, setCurrentWorkspace } = useWorkspace();
   const { projects, currentProject, fetchProjects, setCurrentProject } = useProject();
   const [isReady, setIsReady] = useState(false);
@@ -37,6 +38,47 @@ export function Navbar() {
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ensure store reflects URL context (workspace/project) on direct navigation
+  useEffect(() => {
+    if (!pathname) return;
+    const projectMatch = pathname.match(/\/projects\/(.+?)(?:$|\/)/);
+    const workspaceMatch = pathname.match(/\/dashboard\/workspace\/(.+?)(?:$|\/)/);
+
+    (async () => {
+      if (projectMatch && projectMatch[1]) {
+        const projectId = projectMatch[1];
+        // If current project not set or different, fetch and set
+        if (!currentProject || currentProject.id !== projectId) {
+          const res = await fetch(`/api/projects/${projectId}`, { headers: { 'Cache-Control': 'no-cache' } });
+          if (res.ok) {
+            const proj = await res.json();
+            setCurrentProject(proj);
+            // Ensure workspace set
+            const wsId: string | undefined = proj.workspaceId;
+            if (wsId && (!currentWorkspace || currentWorkspace.id !== wsId)) {
+              const list = workspaces.length ? workspaces : await fetchWorkspaces();
+              const found = list.find(w => w.id === wsId) || null;
+              if (found) setCurrentWorkspace(found);
+              localStorage.setItem('siq:lastWorkspaceId', wsId);
+              await fetchProjects(wsId);
+            }
+            localStorage.setItem('siq:lastProjectId', projectId);
+          }
+        }
+      } else if (workspaceMatch && workspaceMatch[1]) {
+        const wsId = workspaceMatch[1];
+        if (!currentWorkspace || currentWorkspace.id !== wsId) {
+          const list = workspaces.length ? workspaces : await fetchWorkspaces();
+          const found = list.find(w => w.id === wsId) || null;
+          if (found) setCurrentWorkspace(found);
+          localStorage.setItem('siq:lastWorkspaceId', wsId);
+          await fetchProjects(wsId);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   useEffect(() => {
     if (currentWorkspace) {
@@ -87,6 +129,10 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
+  const isHome = pathname === '/' || pathname === '/dashboard' || pathname === '/get-started';
+  const isProjectPath = /\/projects\//.test(pathname || '');
+  const isWorkspacePath = /\/dashboard\/workspace\//.test(pathname || '') || /\/workspaces\/?$/.test(pathname || '');
+
   return (
     <nav className="sticky top-0 z-[60] border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center gap-4 px-4">
@@ -95,7 +141,8 @@ export function Navbar() {
           <Link href="/" className="font-semibold">
             <span className="inline-block">SprintIQ</span>
           </Link>
-          <span className="text-muted-foreground">/</span>
+          {!isHome && <span className="text-muted-foreground">/</span>}
+          {!isHome && (
           <div className="relative" data-dropdown="ws">
             <button
               className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
@@ -161,9 +208,10 @@ export function Navbar() {
             </div>
             )}
           </div>
+          )}
 
           {/* Project Switcher inline */}
-          {currentWorkspace && (
+          {currentWorkspace && isProjectPath && (
             <>
               <span className="text-muted-foreground">/</span>
               <div className="relative" data-dropdown="proj">

@@ -19,70 +19,25 @@ interface WorkspaceDashboardClientProps {
   workspace: { id: string; name: string; description: string | null } | null;
 }
 
-// Static project data for demo
-const staticProjects = [
-  {
-    id: '1',
-    name: 'Mobile App Redesign',
-    description: 'Complete overhaul of the mobile application user interface with modern design principles',
-    status: 'active',
-    progress: 75,
-    health: 'on-track',
-    teamMembers: [
-      { id: '1', name: 'Sarah Chen', avatar: null },
-      { id: '2', name: 'Mike Rodriguez', avatar: null },
-      { id: '3', name: 'Alex Thompson', avatar: null }
-    ],
-    tasksCompleted: 24,
-    totalTasks: 32
-  },
-  {
-    id: '2',
-    name: 'API Integration Platform',
-    description: 'Build a comprehensive API gateway and integration platform for third-party services',
-    status: 'active',
-    progress: 45,
-    health: 'at-risk',
-    teamMembers: [
-      { id: '4', name: 'David Kim', avatar: null },
-      { id: '5', name: 'Lisa Wang', avatar: null }
-    ],
-    tasksCompleted: 18,
-    totalTasks: 40
-  },
-  {
-    id: '3',
-    name: 'Security Audit',
-    description: 'Comprehensive security review and implementation of enhanced security measures',
-    status: 'planning',
-    progress: 20,
-    health: 'on-track',
-    teamMembers: [
-      { id: '6', name: 'Tom Wilson', avatar: null }
-    ],
-    tasksCompleted: 3,
-    totalTasks: 15
-  },
-  {
-    id: '4',
-    name: 'Data Analytics Dashboard',
-    description: 'Advanced analytics dashboard with real-time data visualization and reporting',
-    status: 'active',
-    progress: 90,
-    health: 'on-track',
-    teamMembers: [
-      { id: '7', name: 'Emma Davis', avatar: null },
-      { id: '8', name: 'James Lee', avatar: null },
-      { id: '9', name: 'Sophie Taylor', avatar: null }
-    ],
-    tasksCompleted: 27,
-    totalTasks: 30
-  }
-];
+type EnrichedProject = {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  progress: number;
+  health: 'on-track' | 'at-risk' | 'delayed';
+  tasksCompleted: number;
+  totalTasks: number;
+  teamMembers: Array<{ id: string; name: string; avatar: string | null }>;
+  teamCount?: number;
+};
 
 export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClientProps) {
   const { setCurrentWorkspace } = useWorkspace();
-  const { projects, fetchProjects, isLoading } = useProject();
+  const { fetchProjects } = useProject();
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [projects, setProjects] = React.useState<EnrichedProject[]>([]);
+  const [showArchived, setShowArchived] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('all');
   const { canManageMembers, canManageSettings } = usePermissions('workspace', workspace?.id);
@@ -92,7 +47,22 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
     if (workspace) {
       setCurrentWorkspace(workspace as any);
       localStorage.setItem('siq:lastWorkspaceId', workspace.id);
-      fetchProjects(workspace.id);
+      (async () => {
+        try {
+          setIsLoading(true);
+          // still call store fetch to keep global store in sync
+          fetchProjects(workspace.id);
+          const res = await fetch(`/api/workspaces/${workspace.id}/projects`, { headers: { 'Cache-Control': 'no-cache' } });
+          if (res.ok) {
+            const data = await res.json();
+            setProjects(data);
+          } else {
+            setProjects([]);
+          }
+        } finally {
+          setIsLoading(false);
+        }
+      })();
     }
   }, [workspace, setCurrentWorkspace, fetchProjects]);
 
@@ -145,11 +115,25 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
     }
   };
 
-  const filteredProjects = staticProjects.filter(project => {
-    const matchesSearch = !query || project.name.toLowerCase().includes(query.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredProjects = projects
+    .filter(p => (showArchived ? p.status === 'archived' : p.status !== 'archived'))
+    .filter(project => {
+      const matchesSearch = !query || project.name.toLowerCase().includes(query.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
 
   return (
     <div className="space-y-6">
@@ -180,6 +164,13 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <Button
+          variant={showArchived ? 'default' : 'outline'}
+          onClick={() => setShowArchived((v) => !v)}
+          className="gap-2"
+        >
+          {showArchived ? 'Show Active Projects' : 'Archived Projects'}
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">
@@ -241,9 +232,17 @@ export function WorkspaceDashboardClient({ workspace }: WorkspaceDashboardClient
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Edit Project</DropdownMenuItem>
-                      <DropdownMenuItem>Archive Project</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); }}>Edit Project</DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); }}>Archive Project</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Are you sure you want to delete this project? This cannot be undone.')) {
+                            handleDeleteProject(project.id);
+                          }
+                        }}
+                      >
                         Delete Project
                       </DropdownMenuItem>
                     </DropdownMenuContent>

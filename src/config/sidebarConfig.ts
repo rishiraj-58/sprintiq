@@ -58,12 +58,6 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Cross-project analytics and insights'
       },
       {
-        title: 'Sprint Planner',
-        icon: Calendar,
-        path: '/dashboard/manager/sprint-planner',
-        description: 'Plan sprints across workspace'
-      },
-      {
         title: 'Billing',
         icon: CreditCard,
         path: '/dashboard/workspace/:workspaceId/billing',

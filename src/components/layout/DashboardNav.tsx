@@ -12,7 +12,6 @@ function useWorkspaceScopedNav(workspaceId?: string) {
     { title: 'Projects', href: `${base}`, icon: 'LayoutDashboard' },
     { title: 'Team', href: `/workspaces/${workspaceId}/team`, icon: 'Users' },
     { title: 'Reports', href: `${base}/reports`, icon: 'BarChartBig' },
-    { title: 'Sprint Planner', href: `/dashboard/manager/sprint-planner`, icon: 'CalendarRange' },
     { title: 'Usage', href: `${base}/usage`, icon: 'BarChart' },
     { title: 'Billing', href: `${base}/billing`, icon: 'CreditCard' },
     { title: 'Audit Logs', href: `${base}/audit-logs`, icon: 'FileClock' },

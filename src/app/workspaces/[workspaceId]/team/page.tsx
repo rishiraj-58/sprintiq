@@ -4,6 +4,8 @@ import { db } from '@/db';
 import { workspaceMembers } from '@/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { WorkspaceTeamClient } from './workspaceTeamClient';
+import { SidebarLayout } from '@/components/layout/SidebarLayout';
+import { Navbar } from '@/components/layout/Navbar';
 
 interface PageProps {
   params: { workspaceId: string };
@@ -21,7 +23,14 @@ export default async function WorkspaceTeamPage({ params }: PageProps) {
 
   if (!membership) redirect('/workspaces');
 
-  return <WorkspaceTeamClient workspaceId={workspaceId} />;
+  return (
+    <>
+      <Navbar />
+      <SidebarLayout>
+        <WorkspaceTeamClient workspaceId={workspaceId} />
+      </SidebarLayout>
+    </>
+  );
 }
 
 

@@ -120,12 +120,12 @@ This section covers features at the main workspace dashboard level.
 
 ### 2.1. Core Features
 * **To-Do List:**
-    -   [ ] **UI Refinement:** Refine the "Team Members" section on the workspace dashboard to be more detailed, perhaps showing user roles and a new "Status" field.
-    -   [ ] **Active Status:**
-        -   [ ] **Schema:** Add an `lastActive` `DateTime` field to the `User` model.
-        -   [ ] **Backend:** Implement middleware or a backend process that updates this timestamp on every authenticated API request from the user.
-        -   [ ] **Frontend:** Display a green dot and "Active today" if `lastActive` is within the last 24 hours. Otherwise, show the last active date.
-    -   [ ] **UI Fix:** Remove the "Sprint Planner" from the main workspace sidebar. It should only exist inside a project.
+    -   [x] **UI Refinement:** Refine the "Team Members" section on the workspace dashboard to be more detailed, perhaps showing user roles and a new "Status" field.
+    -   [x] **Active Status:**
+        -   [x] **Schema:** Add an `lastActive` `DateTime` field to the `User` model.
+        -   [x] **Backend:** Implement middleware or a backend process that updates this timestamp on every authenticated API request from the user.
+        -   [x] **Frontend:** Display a green dot and "Active today" if `lastActive` is within the last 24 hours. Otherwise, show the last active date.
+    -   [x] **UI Fix:** Remove the "Sprint Planner" from the main workspace sidebar. It should only exist inside a project.
 
 ### 2.2. Workspace Reports
 * **Issue:** The entire section needs backend logic.

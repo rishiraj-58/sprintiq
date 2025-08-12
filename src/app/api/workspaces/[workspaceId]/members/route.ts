@@ -17,8 +17,7 @@ export async function GET(
       .select({ id: workspaceMembers.id })
       .from(workspaceMembers)
       .where(
-        eq(workspaceMembers.profileId, profile.id) &&
-        eq(workspaceMembers.workspaceId, workspaceId)
+        and(eq(workspaceMembers.profileId, profile.id), eq(workspaceMembers.workspaceId, workspaceId))
       );
 
     if (!membership) {
@@ -49,6 +48,40 @@ export async function GET(
       { error: 'Failed to fetch workspace members' },
       { status: 500 }
     );
+  }
+}
+
+export async function POST(
+  req: Request,
+  { params }: { params: { workspaceId: string } }
+) {
+  try {
+    const profile = await requireAuth();
+    const { workspaceId } = params;
+    const { profileId, role } = await req.json();
+    if (!profileId || !role) return new NextResponse('profileId and role required', { status: 400 });
+
+    const [mem] = await db
+      .select({ id: workspaceMembers.id, role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.profileId, profile.id), eq(workspaceMembers.workspaceId, workspaceId)));
+    if (!mem || (mem.role !== 'owner' && mem.role !== 'manager')) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    const [existing] = await db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.profileId, profileId)));
+
+    if (existing) {
+      await db.update(workspaceMembers).set({ role }).where(eq(workspaceMembers.id, existing.id));
+    }
+
+    return new NextResponse(null, { status: 204 });
+  } catch (e) {
+    console.error('update workspace member role error', e);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 

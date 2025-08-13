@@ -63,7 +63,7 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       .replace(/_/g, '-');
   }
 
-  function parseToolCallFromText(text: string): { tool: string; args: any } | null {
+  function parseToolCallFromText(text: string): { tool: string; args: any }[] | null {
     console.log('🔍 [AI Chat] Parsing tool call from text:', { text: text.substring(0, 200) + '...' });
     try {
       // Look for a ```json ... ``` fenced block
@@ -72,9 +72,14 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       console.log('🔍 [AI Chat] Extracted JSON raw:', { raw, hasMatch: !!match });
       const parsed = JSON.parse(raw);
       console.log('🔍 [AI Chat] Parsed JSON result:', parsed);
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.steps)) {
+        const steps = parsed.steps
+          .filter((s: any) => s && typeof s === 'object' && s.tool && s.args)
+          .map((s: any) => ({ tool: String(s.tool), args: s.args }));
+        return steps.length > 0 ? steps : null;
+      }
       if (parsed && typeof parsed === 'object' && parsed.tool && parsed.args) {
-        console.log('🔍 [AI Chat] Valid tool call found:', { tool: parsed.tool, args: parsed.args });
-        return { tool: String(parsed.tool), args: parsed.args };
+        return [{ tool: String(parsed.tool), args: parsed.args }];
       }
     } catch (error) {
       console.log('🔍 [AI Chat] Failed to parse tool call:', error);
@@ -293,7 +298,7 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
         responseData: data
       });
 
-      const maybeTool = parseToolCallFromText(content);
+      const maybeSteps = parseToolCallFromText(content);
       // if (maybeTool) {
       //   console.log('🔧 [AI Chat] Tool call detected:', {
       //     tool: maybeTool.tool,
@@ -313,9 +318,10 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       const aiMsg: ChatMessage = { role: 'assistant', content };
       setMessages((prev) => [...prev, aiMsg]);
 
-      if (maybeTool) {
-        // MODIFIED: Use the new centralized dispatcher.
-        await executeTool(maybeTool.tool, maybeTool.args);
+      if (maybeSteps && maybeSteps.length > 0) {
+        for (const step of maybeSteps) {
+          await executeTool(step.tool, step.args);
+        }
       }
     } catch (error) {
       console.error('❌ [AI Chat] Error sending message:', error);
@@ -327,7 +333,9 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
 
   // This function decides how to handle a tool based on its name.
   async function executeTool(tool: string, args: any) {
-    const t = normalizeToolRouteName(tool);
+    let t = normalizeToolRouteName(tool);
+    // Normalize alternative naming (post_breakdown-task emits 'breakdown-task' route)
+    if (t === 'post-breakdown-task') t = 'breakdown-task';
     const isReader =
       t.startsWith('get-') ||
       t === 'search-tasks' ||
@@ -337,7 +345,9 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       t === 'update-task' ||
       t === 'create-task' ||
       t === 'comment' ||
-      t === 'delete-task';
+      t === 'delete-task' ||
+      t === 'breakdown-task' ||
+      t === 'create-bug-from-text';
 
     if (isReader) {
       await executeReaderTool(t, args);
@@ -476,6 +486,26 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
             setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
             setResultMsg(summary);
           }
+        }
+      } else if (toolName === 'breakdown-task' || toolName === 'post_breakdown-task' || toolName === 'create-bug-from-text') {
+        const res = await fetch(`/api/ai/tools/${toolName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingTool.args),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
+        } else {
+          const summary = data?.message || `${toolName} executed successfully.`;
+          setMessages((prev) => [...prev, { role: 'assistant', content: `
+${summary}
+
+\`\`\`json
+${JSON.stringify(data, null, 2)}
+\`\`\`
+` }]);
+          setResultMsg(summary);
         }
       } else {
         // Default behavior for other writer tools
@@ -797,6 +827,28 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
   taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
   taskTitle: resolvedTaskTitle || pendingTool?.args?.taskTitle || undefined,
   projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || undefined,
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'breakdown-task' ? (
+                <div className="text-sm">
+                  The AI wants to break down a task into subtasks:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || '(missing)',
+  title: pendingTool?.args?.title || '(missing)'
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'create-bug-from-text' ? (
+                <div className="text-sm">
+                  The AI wants to create a bug from unstructured text:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || '(missing)',
+  text: pendingTool?.args?.text ? String(pendingTool?.args?.text).slice(0, 200) + (String(pendingTool?.args?.text).length > 200 ? '…' : '') : '(missing)'
 }, null, 2)}
                   </pre>
                   Do you want to proceed?

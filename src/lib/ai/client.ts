@@ -77,6 +77,11 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
           * \`{ "tool": "post_update-task", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>", "status?": "string", "priority?": "string", "storyPoints?": number, "assigneeName?": "string" } }\`
       * **Delete a Task:**
           * \`{ "tool": "post_delete-task", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>" } }\`
+      * **Breakdown a Task:**
+          * \`{ "tool": "post_breakdown-task", "args": { "projectId": "<uuid>", "title": "string" } }\`
+          * Alternative route name also supported: \`post_breakdown-task\` → \`/api/ai/tools/breakdown-task\`
+      * **Create Bug From Text:**
+          * \`{ "tool": "post_create-bug-from-text", "args": { "projectId": "<uuid>", "text": "string" } }\`
       * **Add a Comment:**
           * \`{ "tool": "post_comment", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "content": "string" } }\`
       `;
@@ -108,7 +113,7 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
       `;
         } else {
           content += `
-      You are in **Execution Mode**. Your goal is to use the correct tool to fulfill the user's request.
+      You are in **Execution Mode**. Your goal is to use the correct tool(s) to fulfill the user's request.
       The user's intent has been identified as **${intent.toUpperCase()}**.
       You MUST only use tools from the appropriate category below.
 
@@ -116,10 +121,21 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
       **${intent === 'write' ? 'Write Tools (for changing data):**' + writeTools : ''}**
 
       **Instructions:**
-      1.  Immediately call the single best tool for the job.
-      2.  Do NOT ask for confirmation.
-      3.  Use names (\`taskTitle\`, \`projectName\`, \`assigneeName\`) when you don't have IDs. The system will resolve them.
-      4.  Output ONLY the JSON for the tool call.
+      1.  When actions are required, output a single JSON object with a top-level \`steps\` array. Each item is a tool call object.
+      2.  For simple requests, \`steps\` will have one item. For complex requests, include multiple items in the order they should run.
+      3.  Do NOT ask for confirmation; the client handles that.
+      4.  Use names (\`taskTitle\`, \`projectName\`, \`assigneeName\`) when you don't have IDs. The system will resolve them.
+      5.  Output ONLY the JSON.
+
+      Example:
+      \`\`\`json
+      {
+        "steps": [
+          { "tool": "post_create-task", "args": { "title": "New Feature" } },
+          { "tool": "post_update-task", "args": { "taskTitle": "New Feature", "assigneeName": "Dave" } }
+        ]
+      }
+      \`\`\`
 
       **Context:**
       \`\`\`json

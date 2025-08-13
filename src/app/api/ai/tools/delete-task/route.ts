@@ -13,9 +13,15 @@ export async function POST(request: NextRequest) {
 
     // Resolve title to ID if needed
     if (!taskId && taskTitle) {
+      const rHeaders = new Headers();
+      rHeaders.set('Content-Type', 'application/json');
+      const cookie = request.headers.get('cookie');
+      if (cookie) rHeaders.set('cookie', cookie);
+      const auth = request.headers.get('authorization');
+      if (auth) rHeaders.set('authorization', auth);
       const resolveReq = new Request(new URL('/api/ai/tools/resolve-id', request.url), {
         method: 'POST',
-        headers: request.headers,
+        headers: rHeaders,
         body: JSON.stringify({ entity: 'task', name: taskTitle, context: { projectId } }),
       });
       const resolveRes = await fetch(resolveReq);
@@ -45,9 +51,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform the delete using the core tasks API (handles RBAC)
+    const dHeaders = new Headers();
+    const cookie2 = request.headers.get('cookie');
+    if (cookie2) dHeaders.set('cookie', cookie2);
+    const auth2 = request.headers.get('authorization');
+    if (auth2) dHeaders.set('authorization', auth2);
     const deleteReq = new Request(new URL(`/api/tasks/${taskId}`, request.url), {
       method: 'DELETE',
-      headers: request.headers,
+      headers: dHeaders,
     });
     const deleteRes = await fetch(deleteReq);
     const deleteData = await deleteRes.json().catch(() => ({ message: 'Task deleted' }));

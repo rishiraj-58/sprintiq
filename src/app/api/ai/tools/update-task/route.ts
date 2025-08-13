@@ -142,6 +142,12 @@ export async function POST(request: Request) {
       updatedAt: new Date(),
     };
 
+    // Short-circuit if no fields to update were provided
+    const hasFieldsToUpdate = Object.keys(updateSet).some((k) => k !== 'updatedAt');
+    if (!hasFieldsToUpdate) {
+      return NextResponse.json({ error: 'No changes provided' }, { status: 400 });
+    }
+
     const [updated] = await db
       .update(tasks)
       .set(updateSet)
@@ -149,12 +155,14 @@ export async function POST(request: Request) {
       .returning();
 
     // Audit + history logging (subset mirroring core route)
-    await db.insert(taskAuditLogs).values({
-      taskId: taskRow.id,
-      actorId: profile.id,
-      action: 'task_updated',
-      details: JSON.stringify(updateSet),
-    });
+    if (hasFieldsToUpdate) {
+      await db.insert(taskAuditLogs).values({
+        taskId: taskRow.id,
+        actorId: profile.id,
+        action: 'task_updated',
+        details: JSON.stringify(updateSet),
+      });
+    }
 
     const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
     const fields: Array<{ key: keyof typeof taskRow; name: string; newVal: any }> = [
@@ -203,6 +211,10 @@ export async function POST(request: Request) {
               : String(c.newValue),
         }))
       );
+    }
+
+    if (changes.length === 0) {
+      return NextResponse.json({ error: 'No actual changes applied' }, { status: 400 });
     }
 
     return NextResponse.json({

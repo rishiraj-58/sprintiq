@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     if (entity === 'project') {
-      // Restrict to projects in workspaces where user is a member
+      // This project logic is already good, no changes needed here.
       const rows = await db
         .select({ id: projects.id, name: projects.name })
         .from(projects)
@@ -62,7 +62,6 @@ export async function POST(request: Request) {
 
       let candidates = rows.map((r) => ({ id: r.id as string, name: r.name as string, score: diceCoefficient(r.name || '', name) }));
 
-      // If none matched via ilike, fall back to all user-visible projects and do fuzzy only
       if (candidates.length === 0) {
         const all = await db
           .select({ id: projects.id, name: projects.name })
@@ -82,12 +81,13 @@ export async function POST(request: Request) {
     }
 
     if (entity === 'task') {
-      // Limit search to tasks within a project context if provided and visible to user
+      // --- Start of Modified Logic ---
+
+      // First, determine which projects to search within. This part is unchanged.
       let projectIds: string[] | null = null;
       if (context?.projectId) {
         projectIds = [context.projectId];
       } else if (context?.workspaceId) {
-        // find all projects in workspace if user is a member
         const wsMembership = await db
           .select({ id: workspaceMembers.id })
           .from(workspaceMembers)
@@ -98,7 +98,6 @@ export async function POST(request: Request) {
         const rows = await db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, context.workspaceId));
         projectIds = rows.map((r) => r.id as string);
       } else {
-        // aggregate all project ids across user workspaces
         const rows = await db
           .select({ id: projects.id })
           .from(projects)
@@ -111,20 +110,47 @@ export async function POST(request: Request) {
         return NextResponse.json({ entity, query: name, best: null, candidates: [] });
       }
 
-      const rows = await db
+      // **IMPROVEMENT**: Perform an `ilike` search directly in the database.
+      // This is much more efficient than fetching hundreds of rows and scoring them in-memory.
+      let rows = await db
         .select({ id: tasks.id, title: tasks.title })
         .from(tasks)
-        .where(inArray(tasks.projectId, projectIds))
-        .limit(200);
+        .where(
+          and(
+            inArray(tasks.projectId, projectIds),
+            ilike(tasks.title, `%${name}%`) // The key change is here
+          )
+        )
+        .limit(limit); // Limit the number of direct matches to score
 
-      const scored = rows
+      // Fallback: if no direct substring match, try tokenized AND matching (all words must appear)
+      if (!rows || rows.length === 0) {
+        const tokens = normalize(name).split(/\s+/).filter(Boolean);
+        if (tokens.length > 0) {
+          rows = await db
+            .select({ id: tasks.id, title: tasks.title })
+            .from(tasks)
+            .where(
+              and(
+                inArray(tasks.projectId, projectIds),
+                // require every token to appear somewhere in the title
+                ...tokens.map((t) => ilike(tasks.title, `%${t}%`))
+              )
+            )
+            .limit(limit);
+        }
+      }
+
+      // Now, score only the relevant candidates returned by the database search.
+      const candidates = rows
         .map((r) => ({ id: r.id as string, name: (r.title as string) || '', score: diceCoefficient((r.title as string) || '', name) }))
         .filter((c) => c.name)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
-
-      const best = scored[0] || null;
-      return NextResponse.json({ entity, query: name, best, candidates: scored });
+        .sort((a, b) => b.score - a.score);
+      
+      const best = candidates[0] || null;
+      return NextResponse.json({ entity, query: name, best, candidates });
+      
+      // --- End of Modified Logic ---
     }
 
     return NextResponse.json({ error: 'Unsupported entity' }, { status: 400 });
@@ -133,5 +159,3 @@ export async function POST(request: Request) {
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
-
-

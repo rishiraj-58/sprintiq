@@ -60,51 +60,75 @@ export async function generateAIResponse({
   return content;
 }
 
-export function buildSystemMessage(context: Record<string, unknown>): ChatMessage {
-  return {
-    role: 'system',
-    content: `
-            You are SprintIQ, an intelligent AI assistant designed to streamline project management. Your persona is that of a helpful and experienced Agile coach and project manager. Your goal is to assist users in managing their tasks, sprints, and projects efficiently and with a friendly, professional tone.
+// File: sprintiq/src/lib/ai/client.ts
 
-            **Guiding Principles:**
+export function buildSystemMessage(context: Record<string, unknown>, intent: 'read' | 'write' | 'clarify'): ChatMessage {
+  const readTools = `
+      * **Search for Tasks:** Use this to find a list of tasks.
+          * \`{ "tool": "get_search-tasks", "args": { "query": "string", "projectId?": "<uuid>" } }\`
+      * **Get Task Details:** Use this to get all information for a single task.
+          * \`{ "tool": "get_task-details", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>" } }\`
+      `;
 
-            * **Use Tools Directly:** When a user asks you to do something (create task, update task, add comment), use the appropriate tool immediately. Do not ask follow-up questions unless absolutely necessary.
-            * **Resolve Names to IDs:** The system will automatically resolve project names and task titles to IDs. You can use \`projectName\` and \`taskTitle\` in your tool calls.
-            * **Be Proactive:** Anticipate user needs. If a user creates a task, you might ask if they want to assign it to someone or add it to the current sprint.
-            * **Leverage Context:** Make full use of the provided context to inform your responses and tool usage.
+        const writeTools = `
+      * **Create a Task:**
+          * \`{ "tool": "post_create-task", "args": { "projectId?": "<uuid>", "projectName?": "string", "title": "string", "details?": "string|null", "priority?": "low|medium|high|urgent", "assigneeName?": "string" } }\`
+      * **Update a Task:**
+          * \`{ "tool": "post_update-task", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>", "status?": "string", "priority?": "string", "storyPoints?": number, "assigneeName?": "string" } }\`
+      * **Delete a Task:**
+          * \`{ "tool": "post_delete-task", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>" } }\`
+      * **Add a Comment:**
+          * \`{ "tool": "post_comment", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "content": "string" } }\`
+      `;
 
-            **Tool Usage:**
+        let content = `You are SprintIQ, an intelligent AI assistant.
+      Your persona is that of a helpful and experienced Agile coach.
+      **Current Date:** ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      `;
 
-            You have access to a set of tools to interact with the SprintIQ system. When you need to use a tool, you MUST output a JSON block in a code fence labeled 'json'. Only output the tool call, and nothing else.
+        if (intent === 'clarify') {
+          content += `
+      You are in **Clarification Mode**. Your primary goal is to determine if the user wants to **read** (get information) or **write** (change information).
+      Based on the user's message, respond with a single JSON object with your decision.
 
-            **Tool Reference:**
+      Respond with ONLY one of the following JSON objects:
+      - \`{ "intent": "read" }\`
+      - \`{ "intent": "write" }\`
+      - \`{ "intent": "answer" }\` (if the user is asking a general question, not related to tools)
 
-            * **Create a Task:** Use this to create a new task.
-                * \`{ "tool": "create-task", "args": { "projectId?": "<uuid>", "projectName?": "string", "title": "string", "details?": "string|null", "priority?": "low|medium|high|urgent", "assigneeId?": "<uuid>|null" } }\`
-                * **Example:** When on a project page: \`{ "tool": "create-task", "args": { "title": "Design the new company logo", "priority": "medium" } }\`
+      Example:
+      User: "change the priority of the login task to high"
+      You respond: \`{ "intent": "write" }\`
 
-            * **Add a Comment:** Use this to add a comment to a task.
-                * \`{ "tool": "comment", "args": { "projectId?": "<uuid>", "projectName?": "string", "taskId?": "<uuid>", "taskTitle?": "string", "content": "string" } }\`
+      User: "show me the details for the analytics bug"
+      You respond: \`{ "intent": "read" }\`
 
-            * **Update a Task:** Use this to update task properties.
-                * \`{ "tool": "update-task", "args": { "projectId?": "<uuid>", "projectName?": "string", "taskId?": "<uuid>", "taskTitle?": "string", "title?": "string", "description?": "string|null", "status?": "todo|in_progress|done|blocked", "priority?": "low|medium|high|urgent", "type?": "feature|bug|chore", "assigneeId?": "<uuid>|null", "sprintId?": "<uuid>|null", "dueDate?": "ISO8601|null", "storyPoints?": number|null } }\`
-                * **Example:** To set story points: \`{ "tool": "update-task", "args": { "taskTitle": "review race strategy", "storyPoints": 5 } }\`
-                * **Example:** To assign to user by name: \`{ "tool": "update-task", "args": { "taskTitle": "Implement push notifications", "assigneeName": "rishi raj" } }\`
+      User: "what is agile methodology?"
+      You respond: \`{ "intent": "answer" }\`
+      `;
+        } else {
+          content += `
+      You are in **Execution Mode**. Your goal is to use the correct tool to fulfill the user's request.
+      The user's intent has been identified as **${intent.toUpperCase()}**.
+      You MUST only use tools from the appropriate category below.
 
-            **Important:** 
-            * Generate tool calls immediately when users request actions
-            * **ALWAYS use the projectId from context when available** - this is automatically provided when you're on a project page
-            * Use \`projectName\` and \`taskTitle\` when you don't have IDs - the system will resolve them automatically
-            * **For user assignments, use \`assigneeName\` instead of \`assigneeId\`** - the system will resolve the user ID automatically
-            * Only output the tool call JSON block, no extra text
-            * If you're unsure about which task the user means, use the task title they provided and let the system resolve it
+      **${intent === 'read' ? 'Read Tools (for fetching information):**' + readTools : ''}**
+      **${intent === 'write' ? 'Write Tools (for changing data):**' + writeTools : ''}**
 
-            **Context:**
-            \`\`\`json
-            ${JSON.stringify(context, null, 2).slice(0, 6000)}
-            \`\`\`
-            `,
-  };
+      **Instructions:**
+      1.  Immediately call the single best tool for the job.
+      2.  Do NOT ask for confirmation.
+      3.  Use names (\`taskTitle\`, \`projectName\`, \`assigneeName\`) when you don't have IDs. The system will resolve them.
+      4.  Output ONLY the JSON for the tool call.
+
+      **Context:**
+      \`\`\`json
+      ${JSON.stringify(context, null, 2).slice(0, 4000)}
+      \`\`\`
+      `;
+        }
+
+      return { role: 'system', content };
 }
 
 export type { ChatMessage };

@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import ReactMarkdown from 'react-markdown'; 
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -28,6 +29,7 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(null);
   const [resolvedTaskId, setResolvedTaskId] = useState<string | null>(null);
+  const [resolvedTaskTitle, setResolvedTaskTitle] = useState<string | null>(null);
   const [urlProjectId, setUrlProjectId] = useState<string | null>(null);
 
   // Infer projectId from URL when used via global widget
@@ -53,6 +55,14 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     return uuidLike || userIdLike;
   }
 
+  function normalizeToolRouteName(tool: string | undefined): string {
+    const t = String(tool || '').trim();
+    return t
+      .replace(/^get[_-]/, 'get-')
+      .replace(/^post[_-]/, '')
+      .replace(/_/g, '-');
+  }
+
   function parseToolCallFromText(text: string): { tool: string; args: any } | null {
     console.log('🔍 [AI Chat] Parsing tool call from text:', { text: text.substring(0, 200) + '...' });
     try {
@@ -71,6 +81,18 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     }
     console.log('🔍 [AI Chat] No valid tool call found');
     return null;
+  }
+
+  function isReaderToolName(tool: string | undefined): boolean {
+    if (!tool) return false;
+    const t = String(tool).trim();
+    return (
+      t.startsWith('get_') ||
+      t.startsWith('get-') ||
+      t === 'search-tasks' ||
+      t === 'get-task-details' ||
+      t === 'get_task-details'
+    );
   }
 
   // Helper to resolve a project by name if projectId missing
@@ -112,6 +134,17 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     }
   }
 
+  async function fetchTaskTitleById(taskId: string): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data?.title === 'string' ? data.title : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function resolveUserIdByName(name: string, ctx: { projectId?: string } = {}): Promise<string | undefined> {
     console.log('🔍 [AI Chat] Resolving user ID for name:', { name, context: ctx });
     try {
@@ -138,15 +171,17 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       console.log('🔄 [AI Chat] Pre-resolving IDs for tool:', pendingTool?.tool);
       setResolvedProjectId(null);
       setResolvedTaskId(null);
-      if (pendingTool?.tool === 'create-task') {
-        const args = pendingTool.args || {};
+      setResolvedTaskTitle(null);
+      const normalized = normalizeToolRouteName(pendingTool?.tool);
+      if (normalized === 'create-task') {
+        const args = pendingTool?.args || {};
         const name = args.projectName || args.project;
         if (!args.projectId && typeof name === 'string' && name.trim().length > 0) {
           const id = await resolveProjectIdByName(name);
           if (!cancelled) setResolvedProjectId(id);
         }
-      } else if (pendingTool?.tool === 'comment') {
-        const args = pendingTool.args || {};
+      } else if (normalized === 'comment') {
+        const args = pendingTool?.args || {};
         const projName = args.projectName || args.project;
         const taskTitle = args.taskTitle || args.title;
         // Resolve project first if needed
@@ -162,8 +197,8 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
           const tid = await resolveTaskIdByTitle(taskTitle, { projectId: pid || effectiveProjectId || undefined });
           if (!cancelled) setResolvedTaskId(tid);
         }
-      } else if (pendingTool?.tool === 'update-task') {
-        const args = pendingTool.args || {};
+      } else if (normalized === 'update-task') {
+        const args = pendingTool?.args || {};
         const projName = args.projectName || args.project;
         // resolve project if provided by name (not strictly required by endpoint, but useful to narrow task)
         let pid: string | null = args.projectId || effectiveProjectId || null;
@@ -178,6 +213,37 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
         if (!args.taskId && typeof title === 'string' && title.trim().length > 0) {
           const tid = await resolveTaskIdByTitle(title, { projectId: pid || effectiveProjectId || undefined });
           if (!cancelled) setResolvedTaskId(tid);
+          if (tid) {
+            const tTitle = await fetchTaskTitleById(tid);
+            if (!cancelled) setResolvedTaskTitle(tTitle);
+          }
+        } else if (args.taskId && typeof args.taskId === 'string') {
+          const tTitle = await fetchTaskTitleById(args.taskId);
+          if (!cancelled) setResolvedTaskTitle(tTitle);
+        }
+      } else if (normalized === 'delete-task') {
+        const args = pendingTool?.args || {};
+        const projName = args.projectName || args.project;
+        // Resolve project first if needed
+        let pid: string | null = args.projectId || effectiveProjectId || null;
+        if (!pid && typeof projName === 'string' && projName.trim().length > 0) {
+          pid = await resolveProjectIdByName(projName);
+          if (!cancelled) setResolvedProjectId(pid);
+        } else if (pid) {
+          if (!cancelled) setResolvedProjectId(pid);
+        }
+        // Resolve task if needed
+        const title = args.taskTitle || args.title;
+        if (!args.taskId && typeof title === 'string' && title.trim().length > 0) {
+          const tid = await resolveTaskIdByTitle(title, { projectId: pid || effectiveProjectId || undefined });
+          if (!cancelled) setResolvedTaskId(tid);
+          if (tid) {
+            const tTitle = await fetchTaskTitleById(tid);
+            if (!cancelled) setResolvedTaskTitle(tTitle);
+          }
+        } else if (args.taskId && typeof args.taskId === 'string') {
+          const tTitle = await fetchTaskTitleById(args.taskId);
+          if (!cancelled) setResolvedTaskTitle(tTitle);
         }
       }
     }
@@ -185,6 +251,14 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     return () => {
       cancelled = true;
     };
+  }, [pendingTool]);
+
+  // Auto-execute reader tools if they somehow get set as pending
+  useEffect(() => {
+    if (pendingTool && isReaderToolName(pendingTool.tool)) {
+      executeReaderTool(pendingTool.tool, pendingTool.args).finally(() => setPendingTool(null));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingTool]);
 
   const send = async () => {
@@ -220,24 +294,29 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       });
 
       const maybeTool = parseToolCallFromText(content);
-      if (maybeTool) {
-        console.log('🔧 [AI Chat] Tool call detected:', {
-          tool: maybeTool.tool,
-          args: maybeTool.args,
-          rawContent: content
-        });
-        // Auto-execute read-only tools without confirmation
-        if (maybeTool.tool === 'search-tasks') {
-          await executeReaderTool(maybeTool.tool, maybeTool.args);
-        } else {
-          setPendingTool(maybeTool);
-        }
-      } else {
-        console.log('💬 [AI Chat] No tool call detected in response');
-      }
+      // if (maybeTool) {
+      //   console.log('🔧 [AI Chat] Tool call detected:', {
+      //     tool: maybeTool.tool,
+      //     args: maybeTool.args,
+      //     rawContent: content
+      //   });
+      //   // Auto-execute read-only tools without confirmation
+      //   if (maybeTool.tool === 'search-tasks') {
+      //     await executeReaderTool(maybeTool.tool, maybeTool.args);
+      //   } else {
+      //     setPendingTool(maybeTool);
+      //   }
+      // } else {
+      //   console.log('💬 [AI Chat] No tool call detected in response');
+      // }
       
       const aiMsg: ChatMessage = { role: 'assistant', content };
       setMessages((prev) => [...prev, aiMsg]);
+
+      if (maybeTool) {
+        // MODIFIED: Use the new centralized dispatcher.
+        await executeTool(maybeTool.tool, maybeTool.args);
+      }
     } catch (error) {
       console.error('❌ [AI Chat] Error sending message:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
@@ -246,39 +325,67 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     }
   };
 
+  // This function decides how to handle a tool based on its name.
+  async function executeTool(tool: string, args: any) {
+    const t = normalizeToolRouteName(tool);
+    const isReader =
+      t.startsWith('get-') ||
+      t === 'search-tasks' ||
+      t === 'get-task-details';
+    const isWriter =
+      t.startsWith('post-') ||
+      t === 'update-task' ||
+      t === 'create-task' ||
+      t === 'comment' ||
+      t === 'delete-task';
+
+    if (isReader) {
+      await executeReaderTool(t, args);
+      return;
+    }
+    if (isWriter) {
+      setPendingTool({ tool: t, args });
+      return;
+    }
+    console.warn(`[AI Chat] Received a tool with an unknown name: ${t}`);
+    setPendingTool({ tool: t, args });
+  }
+
+  // This function handles all read-only operations.
   async function executeReaderTool(tool: string, args: any) {
+    // Normalize tool name to existing API route naming
+    let endpointName = normalizeToolRouteName(tool);
+    // Map prefixed get-* tools to actual AI tool route names when needed
+    if (endpointName.startsWith('get-') && endpointName !== 'get-task-details') {
+      endpointName = endpointName.slice(4);
+    }
+    // Add an optimistic message
+    setMessages((prev) => [...prev, { role: 'assistant', content: `Fetching details for ${endpointName}...` }]);
+    setLoading(true);
+
     try {
-      if (tool === 'search-tasks') {
-        const payload = {
-          query: args?.query || args?.taskTitle || args?.title || '',
-          projectId: args?.projectId || effectiveProjectId || undefined,
-          limit: typeof args?.limit === 'number' ? args.limit : 5,
-        };
-        if (!payload.query) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: 'No search query provided.' }]);
-          return;
-        }
-        const res = await fetch('/api/ai/tools/search-tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: data?.error || 'Failed to search tasks' }]);
-          return;
-        }
-        const tasksFound: Array<{ id: string; title: string; projectId: string }>
-          = data?.tasks || [];
-        if (tasksFound.length === 0) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: 'No tasks found matching that query.' }]);
-          return;
-        }
-        const lines = tasksFound.map((t) => `- ${t.id}: ${t.title}`).join('\n');
-        setMessages((prev) => [...prev, { role: 'assistant', content: `Found tasks:\n${lines}` }]);
+      const params = new URLSearchParams();
+      const mergedArgs: Record<string, any> = { ...args };
+      if (effectiveProjectId && mergedArgs.projectId == null) {
+        mergedArgs.projectId = effectiveProjectId;
       }
+      Object.entries(mergedArgs).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) params.append(k, String(v));
+      });
+      const res = await fetch(`/api/ai/tools/${endpointName}?${params.toString()}`);
+      const data = await res.json();
+
+      let resultMessage = '';
+      if (!res.ok) {
+        resultMessage = `Error: ${data.error || `Failed to execute ${endpointName}`}`;
+      } else {
+        resultMessage = `Here are the details I found:\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``;
+      }
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: resultMessage }]);
     } catch (err: any) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: err?.message || 'Reader tool error' }]);
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: err?.message || 'Reader tool error' }]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -286,175 +393,105 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     if (!pendingTool) return;
     setExecuting(true);
     setResultMsg(null);
-    
-    console.log('⚡ [AI Chat] Executing tool:', {
-      tool: pendingTool.tool,
-      args: pendingTool.args,
-      resolvedProjectId,
-      resolvedTaskId,
-      effectiveProjectId
-    });
+
+    // Normalize writer tool route (support post_* variants)
+    const toolName = normalizeToolRouteName(pendingTool.tool);
     
     try {
-      if (pendingTool.tool === 'update-task') {
+      if (toolName === 'update-task') {
         const args = pendingTool.args || {};
-        // Use the already resolved ID, or the one from the tool args
-        let finalTaskId = args.taskId || resolvedTaskId;
 
-        // --- START: MODIFICATION ---
-        // If we still don't have an ID, but we have a title, make one last attempt to resolve it.
-        // This makes the confirmation step more robust.
-        if (!finalTaskId && (args.taskTitle || args.title)) {
-          const title = args.taskTitle || args.title;
-          const projectId = args.projectId || resolvedProjectId || effectiveProjectId;
-          console.log(`🔍 [AI Chat] Final attempt to resolve task ID for title: "${title}" in project: ${projectId}`);
-          finalTaskId = await resolveTaskIdByTitle(title, { projectId: projectId || undefined });
-          console.log(`🔍 [AI Chat] Final resolution result:`, { title, projectId, finalTaskId });
+        // Determine final taskId (prefer provided, else pre-resolved, else resolve now via title)
+        let finalTaskId: string | null | undefined = args.taskId || resolvedTaskId;
+        const candidateTitle: string | undefined = args.taskTitle || args.title;
+        let projectContext: string | undefined = args.projectId || resolvedProjectId || effectiveProjectId;
+        if (!finalTaskId && typeof candidateTitle === 'string' && candidateTitle.trim().length > 0) {
+          finalTaskId = await resolveTaskIdByTitle(candidateTitle, { projectId: projectContext });
         }
-        // --- END: MODIFICATION ---
 
-        // Resolve assigneeName to assigneeId if provided
+        // Resolve assigneeName -> assigneeId if necessary
         let finalAssigneeId: string | undefined = args.assigneeId ?? undefined;
         if (args.assigneeName && !args.assigneeId) {
-          console.log('🔍 [AI Chat] Resolving assignee name to ID:', args.assigneeName);
-          let resolvedUserId: string | undefined;
-          if (typeof args.assigneeName === 'string' && isIdLike(args.assigneeName)) {
-            resolvedUserId = args.assigneeName;
-          } else {
-            resolvedUserId = (await resolveUserIdByName(args.assigneeName, { projectId: effectiveProjectId ?? undefined })) ?? undefined;
-          }
-          if (!resolvedUserId) {
-            setResultMsg(`Error: Could not find user "${args.assigneeName}" in this project/workspace.`);
-            setExecuting(false);
-            setPendingTool(null);
-            return;
-          }
-          finalAssigneeId = resolvedUserId;
-          console.log('🔍 [AI Chat] Assignee resolution result:', { name: args.assigneeName, id: finalAssigneeId });
+          const maybeId = typeof args.assigneeName === 'string' && isIdLike(args.assigneeName)
+            ? args.assigneeName
+            : await resolveUserIdByName(args.assigneeName, { projectId: projectContext });
+          finalAssigneeId = maybeId ?? undefined;
         }
 
-        const payload: any = {
+        const payload: Record<string, any> = {
           ...args,
-          taskId: finalTaskId, // Use the potentially newly resolved ID
-          assigneeId: finalAssigneeId, // Use the resolved assignee ID (already undefined if null)
+          taskId: finalTaskId,
+          ...(Object.prototype.hasOwnProperty.call(args, 'assigneeName') || Object.prototype.hasOwnProperty.call(args, 'assigneeId')
+            ? { assigneeId: finalAssigneeId ?? null }
+            : {}),
         };
-        
-        // This check is now more reliable because of the final attempt above.
+
         if (!payload.taskId) {
-          setResultMsg('Error: Could not find a task matching that title. Please be more specific, or use the task ID.');
+          setResultMsg('Error: Could not find a task matching that title. Please be more specific or provide taskId.');
+        } else if (Object.prototype.hasOwnProperty.call(payload, 'assigneeId') && payload.assigneeId === null && args.assigneeName) {
+          setResultMsg(`Error: Could not find user "${args.assigneeName}" in this project/workspace.`);
         } else {
-          console.log('📤 [AI Chat] Calling update-task API with payload:', payload);
-          const res = await fetch('/api/ai/tools/update-task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          console.log('📥 [AI Chat] update-task API response:', { status: res.status, data });
-          if (!res.ok) {
-            setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to update task');
-          } else {
-            setResultMsg(data?.message || 'Task updated');
-            const summary = data?.task
-              ? `Updated task ${data.task.id} (${data.task.title || ''})`
-              : 'Task updated successfully';
-            setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
-          }
-        }
-      } else if (pendingTool.tool === 'create-task') {
-        // (Your existing create-task logic remains here)
-        const args = pendingTool.args || {};
-        const payload: any = {
-          projectId: args.projectId || effectiveProjectId,
-          projectName: args.projectName || args.project || undefined,
-          title: args.title || args.name || 'New Task',
-          details: args.details ?? args.description ?? null,
-          priority: args.priority || 'medium',
-        };
-        // Handle assignee resolution
-        if (args.assigneeName && !args.assigneeId) {
-          console.log('🔍 [AI Chat] Resolving assignee name to ID for create-task:', args.assigneeName);
-          let resolvedUserId: string | undefined;
-          if (typeof args.assigneeName === 'string' && isIdLike(args.assigneeName)) {
-            resolvedUserId = args.assigneeName;
-          } else {
-            resolvedUserId = (await resolveUserIdByName(args.assigneeName, { projectId: effectiveProjectId ?? undefined })) ?? undefined;
-          }
-          if (!resolvedUserId) {
-            setResultMsg(`Error: Could not find user "${args.assigneeName}" in this project/workspace.`);
-            setExecuting(false);
-            setPendingTool(null);
-            return;
-          }
-          payload.assigneeId = resolvedUserId;
-          console.log('🔍 [AI Chat] Create-task assignee resolution result:', { name: args.assigneeName, id: payload.assigneeId });
-        } else if (Object.prototype.hasOwnProperty.call(args, 'assigneeId')) {
-          payload.assigneeId = args.assigneeId ?? undefined;
-        }
-        if (Object.prototype.hasOwnProperty.call(args, 'status')) payload.status = args.status;
-
-        if (!payload.projectId && payload.projectName) {
-          const resolved = await resolveProjectIdByName(String(payload.projectName));
-          if (resolved) payload.projectId = resolved;
-          if (resolved) setResolvedProjectId(resolved);
-        }
-
-        if (!payload.projectId) {
-          setResultMsg('Error: Missing projectId. Open a project or include projectId/projectName in the tool args.');
-        } else {
-          console.log('📤 [AI Chat] Calling create-task API with payload:', payload);
-          const res = await fetch('/api/ai/tools/create-task', {
+          const res = await fetch(`/api/ai/tools/${toolName}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          console.log('📥 [AI Chat] create-task API response:', { status: res.status, data });
           if (!res.ok) {
-            setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to create task');
+            setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
           } else {
-            const t = data?.task || data;
-            const summary = t?.id ? `Created task ${t.id} (${t.title || ''})` : 'Task created';
+            const summary = data?.message || `${toolName} executed successfully.`;
             setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
-            setResultMsg('Task created successfully');
+            setResultMsg(summary);
           }
         }
-      } else if (pendingTool.tool === 'comment') {
-        // (Your existing comment logic remains here)
+      } else if (toolName === 'delete-task') {
         const args = pendingTool.args || {};
-        const payload: any = {
-          projectId: args.projectId || resolvedProjectId || projectId,
-          taskId: args.taskId || resolvedTaskId || undefined,
-          content: args.content || args.text || '',
+        let finalTaskId: string | null | undefined = args.taskId || resolvedTaskId;
+        const candidateTitle: string | undefined = args.taskTitle || args.title;
+        const projectContext: string | undefined = args.projectId || resolvedProjectId || effectiveProjectId;
+        if (!finalTaskId && typeof candidateTitle === 'string' && candidateTitle.trim().length > 0) {
+          finalTaskId = await resolveTaskIdByTitle(candidateTitle, { projectId: projectContext });
+        }
+
+        const payload = {
+          taskId: finalTaskId,
+          taskTitle: candidateTitle,
+          projectId: projectContext,
         };
-        if (!payload.projectId && args.projectName) {
-          const pid = await resolveProjectIdByName(String(args.projectName));
-          if (pid) payload.projectId = pid;
-        }
-        if (!payload.taskId && args.taskTitle) {
-          const tid = await resolveTaskIdByTitle(String(args.taskTitle), { projectId: payload.projectId || projectId });
-          if (tid) payload.taskId = tid;
-        }
-        if (!payload.projectId || !payload.taskId || !payload.content) {
-          setResultMsg('Error: Missing projectId/taskId/content for comment. Include projectName and taskTitle or open the project.');
+
+        if (!payload.taskId) {
+          setResultMsg('Error: Could not find a task matching that title. Please be more specific or provide taskId.');
         } else {
-          console.log('📤 [AI Chat] Calling comment API with payload:', payload);
-          const res = await fetch(`/api/ai/tools/comment`, {
+          const res = await fetch(`/api/ai/tools/${toolName}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           const data = await res.json();
-          console.log('📥 [AI Chat] comment API response:', { status: res.status, data });
           if (!res.ok) {
-            setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to add comment');
+            setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
           } else {
-            setMessages((prev) => [...prev, { role: 'assistant', content: 'Comment added.' }]);
-            setResultMsg('Comment added successfully');
+            const summary = data?.message || `${toolName} executed successfully.`;
+            setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+            setResultMsg(summary);
           }
         }
       } else {
-        setResultMsg(`Unsupported tool: ${pendingTool.tool}`);
+        // Default behavior for other writer tools
+        const res = await fetch(`/api/ai/tools/${toolName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingTool.args),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
+        } else {
+          const summary = data?.message || `${toolName} executed successfully.`;
+          setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+          setResultMsg(summary);
+        }
       }
     } catch (e: any) {
       setResultMsg(e?.message || 'Unexpected error');
@@ -463,6 +500,191 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       setPendingTool(null);
     }
   }
+
+  
+
+  // async function executePendingTool() {
+  //   if (!pendingTool) return;
+  //   setExecuting(true);
+  //   setResultMsg(null);
+    
+  //   console.log('⚡ [AI Chat] Executing tool:', {
+  //     tool: pendingTool.tool,
+  //     args: pendingTool.args,
+  //     resolvedProjectId,
+  //     resolvedTaskId,
+  //     effectiveProjectId
+  //   });
+    
+  //   try {
+  //     if (pendingTool.tool === 'update-task') {
+  //       const args = pendingTool.args || {};
+  //       // Use the already resolved ID, or the one from the tool args
+  //       let finalTaskId = args.taskId || resolvedTaskId;
+
+  //       // --- START: MODIFICATION ---
+  //       // If we still don't have an ID, but we have a title, make one last attempt to resolve it.
+  //       // This makes the confirmation step more robust.
+  //       if (!finalTaskId && (args.taskTitle || args.title)) {
+  //         const title = args.taskTitle || args.title;
+  //         const projectId = args.projectId || resolvedProjectId || effectiveProjectId;
+  //         console.log(`🔍 [AI Chat] Final attempt to resolve task ID for title: "${title}" in project: ${projectId}`);
+  //         finalTaskId = await resolveTaskIdByTitle(title, { projectId: projectId || undefined });
+  //         console.log(`🔍 [AI Chat] Final resolution result:`, { title, projectId, finalTaskId });
+  //       }
+  //       // --- END: MODIFICATION ---
+
+  //       // Resolve assigneeName to assigneeId if provided
+  //       let finalAssigneeId: string | undefined = args.assigneeId ?? undefined;
+  //       if (args.assigneeName && !args.assigneeId) {
+  //         console.log('🔍 [AI Chat] Resolving assignee name to ID:', args.assigneeName);
+  //         let resolvedUserId: string | undefined;
+  //         if (typeof args.assigneeName === 'string' && isIdLike(args.assigneeName)) {
+  //           resolvedUserId = args.assigneeName;
+  //         } else {
+  //           resolvedUserId = (await resolveUserIdByName(args.assigneeName, { projectId: effectiveProjectId ?? undefined })) ?? undefined;
+  //         }
+  //         if (!resolvedUserId) {
+  //           setResultMsg(`Error: Could not find user "${args.assigneeName}" in this project/workspace.`);
+  //           setExecuting(false);
+  //           setPendingTool(null);
+  //           return;
+  //         }
+  //         finalAssigneeId = resolvedUserId;
+  //         console.log('🔍 [AI Chat] Assignee resolution result:', { name: args.assigneeName, id: finalAssigneeId });
+  //       }
+
+  //       const payload: any = {
+  //         ...args,
+  //         taskId: finalTaskId, // Use the potentially newly resolved ID
+  //         assigneeId: finalAssigneeId, // Use the resolved assignee ID (already undefined if null)
+  //       };
+        
+  //       // This check is now more reliable because of the final attempt above.
+  //       if (!payload.taskId) {
+  //         setResultMsg('Error: Could not find a task matching that title. Please be more specific, or use the task ID.');
+  //       } else {
+  //         console.log('📤 [AI Chat] Calling update-task API with payload:', payload);
+  //         const res = await fetch('/api/ai/tools/update-task', {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' },
+  //           body: JSON.stringify(payload),
+  //         });
+  //         const data = await res.json();
+  //         console.log('📥 [AI Chat] update-task API response:', { status: res.status, data });
+  //         if (!res.ok) {
+  //           setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to update task');
+  //         } else {
+  //           setResultMsg(data?.message || 'Task updated');
+  //           const summary = data?.task
+  //             ? `Updated task ${data.task.id} (${data.task.title || ''})`
+  //             : 'Task updated successfully';
+  //           setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+  //         }
+  //       }
+  //     } else if (pendingTool.tool === 'create-task') {
+  //       // (Your existing create-task logic remains here)
+  //       const args = pendingTool.args || {};
+  //       const payload: any = {
+  //         projectId: args.projectId || effectiveProjectId,
+  //         projectName: args.projectName || args.project || undefined,
+  //         title: args.title || args.name || 'New Task',
+  //         details: args.details ?? args.description ?? null,
+  //         priority: args.priority || 'medium',
+  //       };
+  //       // Handle assignee resolution
+  //       if (args.assigneeName && !args.assigneeId) {
+  //         console.log('🔍 [AI Chat] Resolving assignee name to ID for create-task:', args.assigneeName);
+  //         let resolvedUserId: string | undefined;
+  //         if (typeof args.assigneeName === 'string' && isIdLike(args.assigneeName)) {
+  //           resolvedUserId = args.assigneeName;
+  //         } else {
+  //           resolvedUserId = (await resolveUserIdByName(args.assigneeName, { projectId: effectiveProjectId ?? undefined })) ?? undefined;
+  //         }
+  //         if (!resolvedUserId) {
+  //           setResultMsg(`Error: Could not find user "${args.assigneeName}" in this project/workspace.`);
+  //           setExecuting(false);
+  //           setPendingTool(null);
+  //           return;
+  //         }
+  //         payload.assigneeId = resolvedUserId;
+  //         console.log('🔍 [AI Chat] Create-task assignee resolution result:', { name: args.assigneeName, id: payload.assigneeId });
+  //       } else if (Object.prototype.hasOwnProperty.call(args, 'assigneeId')) {
+  //         payload.assigneeId = args.assigneeId ?? undefined;
+  //       }
+  //       if (Object.prototype.hasOwnProperty.call(args, 'status')) payload.status = args.status;
+
+  //       if (!payload.projectId && payload.projectName) {
+  //         const resolved = await resolveProjectIdByName(String(payload.projectName));
+  //         if (resolved) payload.projectId = resolved;
+  //         if (resolved) setResolvedProjectId(resolved);
+  //       }
+
+  //       if (!payload.projectId) {
+  //         setResultMsg('Error: Missing projectId. Open a project or include projectId/projectName in the tool args.');
+  //       } else {
+  //         console.log('📤 [AI Chat] Calling create-task API with payload:', payload);
+  //         const res = await fetch('/api/ai/tools/create-task', {
+  //           method: 'POST',
+  //           headers: { 'Content-Type': 'application/json' },
+  //           body: JSON.stringify(payload),
+  //         });
+  //         const data = await res.json();
+  //         console.log('📥 [AI Chat] create-task API response:', { status: res.status, data });
+  //         if (!res.ok) {
+  //           setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to create task');
+  //         } else {
+  //           const t = data?.task || data;
+  //           const summary = t?.id ? `Created task ${t.id} (${t.title || ''})` : 'Task created';
+  //           setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+  //           setResultMsg('Task created successfully');
+  //         }
+  //       }
+  //     } else if (pendingTool.tool === 'comment') {
+  //       // (Your existing comment logic remains here)
+  //       const args = pendingTool.args || {};
+  //       const payload: any = {
+  //         projectId: args.projectId || resolvedProjectId || projectId,
+  //         taskId: args.taskId || resolvedTaskId || undefined,
+  //         content: args.content || args.text || '',
+  //       };
+  //       if (!payload.projectId && args.projectName) {
+  //         const pid = await resolveProjectIdByName(String(args.projectName));
+  //         if (pid) payload.projectId = pid;
+  //       }
+  //       if (!payload.taskId && args.taskTitle) {
+  //         const tid = await resolveTaskIdByTitle(String(args.taskTitle), { projectId: payload.projectId || projectId });
+  //         if (tid) payload.taskId = tid;
+  //       }
+  //       if (!payload.projectId || !payload.taskId || !payload.content) {
+  //         setResultMsg('Error: Missing projectId/taskId/content for comment. Include projectName and taskTitle or open the project.');
+  //       } else {
+  //         console.log('📤 [AI Chat] Calling comment API with payload:', payload);
+  //         const res = await fetch(`/api/ai/tools/comment`, {
+  //           method: 'POST',
+  //           headers: { 'Content-Type': 'application/json' },
+  //           body: JSON.stringify(payload),
+  //         });
+  //         const data = await res.json();
+  //         console.log('📥 [AI Chat] comment API response:', { status: res.status, data });
+  //         if (!res.ok) {
+  //           setResultMsg(data?.error ? `Error: ${data.error}` : 'Failed to add comment');
+  //         } else {
+  //           setMessages((prev) => [...prev, { role: 'assistant', content: 'Comment added.' }]);
+  //           setResultMsg('Comment added successfully');
+  //         }
+  //       }
+  //     } else {
+  //       setResultMsg(`Unsupported tool: ${pendingTool.tool}`);
+  //     }
+  //   } catch (e: any) {
+  //     setResultMsg(e?.message || 'Unexpected error');
+  //   } finally {
+  //     setExecuting(false);
+  //     setPendingTool(null);
+  //   }
+  // }
+
 
   useEffect(() => {
     if (open && scrollRef.current) {
@@ -499,7 +721,7 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
             {messages.map((m, idx) => (
               <div key={idx} className={m.role === 'user' ? 'text-right' : 'text-left'}>
                 <div className={`inline-block rounded-md px-3 py-2 text-sm ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                  {m.content}
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
                 </div>
               </div>
             ))}
@@ -525,7 +747,7 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!pendingTool}>
+      <AlertDialog open={!!pendingTool && !isReaderToolName(pendingTool?.tool)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm AI action</AlertDialogTitle>
@@ -563,6 +785,18 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
           projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || '(resolving or missing)',
   taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
   content: pendingTool?.args?.content || pendingTool?.args?.text || '(missing)'
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'delete-task' ? (
+                <div className="text-sm">
+                  The AI wants to delete a task with the following details:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
+  taskTitle: resolvedTaskTitle || pendingTool?.args?.taskTitle || undefined,
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || undefined,
 }, null, 2)}
                   </pre>
                   Do you want to proceed?

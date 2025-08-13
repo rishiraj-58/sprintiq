@@ -57,6 +57,21 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: taskData.error || 'Failed to fetch task details' }, { status: taskDetailsRes.status });
     }
 
+    // Persist last viewed task memory
+    try {
+      const mHeaders = new Headers();
+      mHeaders.set('Content-Type', 'application/json');
+      const cookie = request.headers.get('cookie');
+      if (cookie) mHeaders.set('cookie', cookie);
+      const auth = request.headers.get('authorization');
+      if (auth) mHeaders.set('authorization', auth);
+      await fetch(new URL('/api/ai/tools/memory', request.url), {
+        method: 'POST',
+        headers: mHeaders,
+        body: JSON.stringify({ key: 'last_viewed_task', value: { taskId: finalTaskId }, projectId }),
+      });
+    } catch {}
+
     return NextResponse.json(taskData);
 
   } catch (e: any) {

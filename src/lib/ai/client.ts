@@ -125,7 +125,8 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
       2.  For simple requests, \`steps\` will have one item. For complex requests, include multiple items in the order they should run.
       3.  Do NOT ask for confirmation; the client handles that.
       4.  Use names (\`taskTitle\`, \`projectName\`, \`assigneeName\`) when you don't have IDs. The system will resolve them.
-      5.  Output ONLY the JSON.
+      5.  If the user refers to "that task" or "it", check context.lastViewedTask for { taskId } and use it.
+      6.  Output ONLY the JSON.
 
       Example:
       \`\`\`json

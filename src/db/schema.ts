@@ -381,3 +381,13 @@ export const userNotificationPreferencesRelations = relations(userNotificationPr
     references: [profiles.id],
   }),
 }));
+
+// AI Long-Term Memory
+export const aiMemory = pgTable('ai_memory', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => profiles.id),
+  projectId: uuid('project_id'),
+  key: text('key').notNull(),
+  value: jsonb('value').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});

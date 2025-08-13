@@ -29,6 +29,22 @@ export async function POST(req: NextRequest) {
 
     const context: Record<string, unknown> = { userId: user.id };
     if (projectId) context.projectId = projectId;
+    // Inject last viewed task memory
+    try {
+      const mHeaders = new Headers();
+      const cookie = req.headers.get('cookie');
+      if (cookie) mHeaders.set('cookie', cookie);
+      const auth = req.headers.get('authorization');
+      if (auth) mHeaders.set('authorization', auth);
+      const memRes = await fetch(new URL(`/api/ai/tools/memory?key=last_viewed_task${projectId ? `&projectId=${projectId}` : ''}`, req.url), {
+        method: 'GET',
+        headers: mHeaders,
+      });
+      if (memRes.ok) {
+        const { memory } = await memRes.json();
+        if (memory?.value) context.lastViewedTask = memory.value;
+      }
+    } catch {}
     const mcp = await getMCPProjectContext({ userId: user.id, projectId });
     if (mcp) context.mcp = mcp;
 

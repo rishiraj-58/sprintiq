@@ -12,9 +12,10 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
     const body = await req.json();
-    const { message, projectId, history: rawHistory = [] } = body as {
+    const { message, projectId, planApprovedSteps, history: rawHistory = [] } = body as {
       message: string;
       projectId?: string;
+      planApprovedSteps?: string[];
       history?: Array<{ role: string; content: string }>;
     };
 
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest) {
 
     const context: Record<string, unknown> = { userId: user.id };
     if (projectId) context.projectId = projectId;
+    if (Array.isArray(planApprovedSteps) && planApprovedSteps.length > 0) {
+      context.planApprovedSteps = planApprovedSteps;
+    }
     // Inject last viewed task memory
     try {
       const mHeaders = new Headers();
@@ -53,10 +57,10 @@ export async function POST(req: NextRequest) {
     const intentMessages = [clarificationSystemMsg, { role: 'user', content: message } as const];
     const intentResponse = await generateAIResponse({ messages: intentMessages, maxTokens: 50, temperature: 0 });
 
-    let intent: 'read' | 'write' | 'answer' = 'answer';
+    let intent: 'read' | 'write' | 'answer' | 'plan' = 'answer';
     try {
       const parsedIntent = JSON.parse(intentResponse);
-      if (['read', 'write', 'answer'].includes(parsedIntent.intent)) {
+      if (['read', 'write', 'answer', 'plan'].includes(parsedIntent.intent)) {
         intent = parsedIntent.intent;
       }
     } catch {
@@ -71,6 +75,10 @@ export async function POST(req: NextRequest) {
       const answerSystemMsg: ChatMessage = { role: 'system', content: 'You are a helpful assistant. Answer the user\'s question.' };
       const answerMessages: ChatMessage[] = [answerSystemMsg, { role: 'user', content: message }];
       finalResponse = await generateAIResponse({ messages: answerMessages });
+    } else if (intent === 'plan') {
+      const planSystemMsg = { role: 'system', content: 'You are in Plan Mode. Return only { "plan": ["First, ...", "Next, ..."] } with 3-6 concise steps.' } as ChatMessage;
+      const planMessages: ChatMessage[] = [planSystemMsg, { role: 'user', content: message }];
+      finalResponse = await generateAIResponse({ messages: planMessages, maxTokens: 300, temperature: 0.3 });
     } else {
         const executionSystemMsg = buildSystemMessage(context, intent);
         // This now uses the validated `history` array, which satisfies TypeScript

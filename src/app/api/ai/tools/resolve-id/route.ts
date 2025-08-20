@@ -4,11 +4,12 @@ import { db } from '@/db';
 import {
   projects,
   tasks,
+  bugs,
   workspaceMembers,
 } from '@/db/schema';
 import { and, eq, ilike, inArray } from 'drizzle-orm';
 
-type Entity = 'project' | 'task';
+type Entity = 'project' | 'task' | 'bug';
 
 function normalize(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -151,6 +152,72 @@ export async function POST(request: Request) {
       return NextResponse.json({ entity, query: name, best, candidates });
       
       // --- End of Modified Logic ---
+    }
+
+    if (entity === 'bug') {
+      // Determine which projects to search within
+      let projectIds: string[] | null = null;
+      if (context?.projectId) {
+        projectIds = [context.projectId];
+      } else if (context?.workspaceId) {
+        const wsMembership = await db
+          .select({ id: workspaceMembers.id })
+          .from(workspaceMembers)
+          .where(and(eq(workspaceMembers.profileId, user.id), eq(workspaceMembers.workspaceId, context.workspaceId)));
+        if (wsMembership.length === 0) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        const rows = await db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, context.workspaceId));
+        projectIds = rows.map((r) => r.id as string);
+      } else {
+        const rows = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .innerJoin(workspaceMembers, eq(projects.workspaceId, workspaceMembers.workspaceId))
+          .where(eq(workspaceMembers.profileId, user.id));
+        projectIds = rows.map((r) => r.id as string);
+      }
+
+      if (!projectIds || projectIds.length === 0) {
+        return NextResponse.json({ entity, query: name, best: null, candidates: [] });
+      }
+
+      // Perform an `ilike` search directly in the database
+      let rows = await db
+        .select({ id: bugs.id, title: bugs.title })
+        .from(bugs)
+        .where(
+          and(
+            inArray(bugs.projectId, projectIds),
+            ilike(bugs.title, `%${name}%`)
+          )
+        )
+        .limit(limit);
+
+      // Fallback: if no direct substring match, try tokenized AND matching
+      if (!rows || rows.length === 0) {
+        const tokens = normalize(name).split(/\s+/).filter(Boolean);
+        if (tokens.length > 0) {
+          rows = await db
+            .select({ id: bugs.id, title: bugs.title })
+            .from(bugs)
+            .where(
+              and(
+                inArray(bugs.projectId, projectIds),
+                ...tokens.map((t) => ilike(bugs.title, `%${t}%`))
+              )
+            )
+            .limit(limit);
+        }
+      }
+
+      const candidates = rows
+        .map((r) => ({ id: r.id as string, name: (r.title as string) || '', score: diceCoefficient((r.title as string) || '', name) }))
+        .filter((c) => c.name)
+        .sort((a, b) => b.score - a.score);
+      
+      const best = candidates[0] || null;
+      return NextResponse.json({ entity, query: name, best, candidates });
     }
 
     return NextResponse.json({ error: 'Unsupported entity' }, { status: 400 });

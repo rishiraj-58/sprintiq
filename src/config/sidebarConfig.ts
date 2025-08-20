@@ -14,7 +14,8 @@ import {
   User,
   FolderOpen,
   ListTodo,
-  Eye
+  Eye,
+  Bug
 } from 'lucide-react';
 
 export type UserRole = 'owner' | 'manager' | 'member' | 'viewer';
@@ -108,6 +109,12 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Sprint planning, active boards, and management'
       },
       {
+        title: 'Bugs',
+        icon: Bug,
+        path: '/projects/:projectId/bugs',
+        description: 'Bug tracking, reporting, and resolution'
+      },
+      {
         title: 'Timeline',
         icon: Clock,
         path: '/projects/:projectId/timeline',
@@ -186,6 +193,12 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Interactive sprint management'
       },
       {
+        title: 'Bugs',
+        icon: Bug,
+        path: '/projects/:projectId/bugs',
+        description: 'Bug tracking and management'
+      },
+      {
         title: 'Timeline',
         icon: Clock,
         path: '/projects/:projectId/timeline',
@@ -252,6 +265,12 @@ export const sidebarConfig: SidebarConfig = {
         description: 'Sprint board interaction'
       },
       {
+        title: 'Bugs',
+        icon: Bug,
+        path: '/projects/:projectId/bugs',
+        description: 'View and report bugs'
+      },
+      {
         title: 'Timeline',
         icon: Clock,
         path: '/projects/:projectId/timeline',
@@ -292,6 +311,12 @@ export const sidebarConfig: SidebarConfig = {
         icon: Flag,
         path: '/projects/:projectId/sprints',
         description: 'Read-only sprint boards'
+      },
+      {
+        title: 'Bugs',
+        icon: Bug,
+        path: '/projects/:projectId/bugs',
+        description: 'Read-only bug reports'
       },
       {
         title: 'Reports',

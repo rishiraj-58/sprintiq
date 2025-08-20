@@ -1,42 +1,83 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { bugs } from '@/db/schema';
-import { PermissionManager } from '@/lib/permissions';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
-    const body = await req.json();
-    const { projectId, title, details, severity = 'medium', status = 'open', assigneeId } = body as any;
+    const { projectId, projectName, title, description, severity, assigneeName, assigneeId } = await request.json();
 
-    if (!projectId || !title) {
-      return new Response('Missing projectId or title', { status: 400 });
+    if (!title) {
+      return NextResponse.json({ error: 'title is required' }, { status: 400 });
     }
 
-    const caps = await PermissionManager.getUserCapabilities(user.id, projectId, 'project');
-    if (!caps.includes('create')) {
-      return new Response('Forbidden', { status: 403 });
+    // Resolve project by name if needed
+    let finalProjectId: string | undefined = projectId;
+    if (!finalProjectId && projectName) {
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      const cookie = request.headers.get('cookie');
+      if (cookie) headers.set('cookie', cookie);
+      const auth = request.headers.get('authorization');
+      if (auth) headers.set('authorization', auth);
+      
+      const res = await fetch(new URL('/api/ai/tools/resolve-id', request.url), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ entity: 'project', name: projectName }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.best?.id) {
+        finalProjectId = String(data.best.id);
+      }
     }
 
-    const [b] = await db
+    if (!finalProjectId) {
+      return NextResponse.json({ error: 'projectId or projectName is required' }, { status: 400 });
+    }
+
+    // Resolve assignee by name if provided
+    let finalAssigneeId: string | undefined = assigneeId;
+    if (!finalAssigneeId && assigneeName) {
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      const cookie = request.headers.get('cookie');
+      if (cookie) headers.set('cookie', cookie);
+      const auth = request.headers.get('authorization');
+      if (auth) headers.set('authorization', auth);
+      
+      const res = await fetch(new URL('/api/ai/tools/resolve-user', request.url), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: assigneeName, context: { projectId: finalProjectId } }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.best?.id) {
+        finalAssigneeId = String(data.best.id);
+      }
+    }
+
+    const [created] = await db
       .insert(bugs)
       .values({
-        title: String(title).slice(0, 200),
-        description: details ?? null,
-        status,
-        severity,
-        projectId,
+        title: title.trim(),
+        description: description?.trim() || null,
+        status: 'open',
+        severity: severity || 'medium',
+        projectId: finalProjectId,
         reporterId: user.id,
-        assigneeId: assigneeId ?? null,
+        assigneeId: finalAssigneeId || null,
       })
       .returning();
 
-    return Response.json({ bug: b });
-  } catch (e) {
-    console.error('ai/tools/create-bug error', e);
-    return new Response('Internal Server Error', { status: 500 });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Bug created successfully', 
+      bug: created 
+    });
+  } catch (error) {
+    console.error('Create bug error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
-
-

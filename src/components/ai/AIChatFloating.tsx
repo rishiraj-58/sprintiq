@@ -31,6 +31,10 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
   const [resolvedTaskId, setResolvedTaskId] = useState<string | null>(null);
   const [resolvedTaskTitle, setResolvedTaskTitle] = useState<string | null>(null);
   const [urlProjectId, setUrlProjectId] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<string[] | null>(null);
+  const [stepQueue, setStepQueue] = useState<{ tool: string; args: any }[] | null>(null);
+  const [lastCreatedTaskId, setLastCreatedTaskId] = useState<string | null>(null);
+  const [queueCancelled, setQueueCancelled] = useState<boolean>(false);
 
   // Infer projectId from URL when used via global widget
   useEffect(() => {
@@ -72,6 +76,19 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       console.log('🔍 [AI Chat] Extracted JSON raw:', { raw, hasMatch: !!match });
       const parsed = JSON.parse(raw);
       console.log('🔍 [AI Chat] Parsed JSON result:', parsed);
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.plan)) {
+        // Render plan and store for approval
+        const steps: string[] = parsed.plan.filter((s: any) => typeof s === 'string');
+        if (steps.length > 0) {
+          setMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: `Proposed plan:\n\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\nProceed?` },
+          ]);
+          // Store pending plan in state for approval path
+          setPendingPlan(steps);
+        }
+        return null;
+      }
       if (parsed && typeof parsed === 'object' && Array.isArray(parsed.steps)) {
         const steps = parsed.steps
           .filter((s: any) => s && typeof s === 'object' && s.tool && s.args)
@@ -96,7 +113,10 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       t.startsWith('get-') ||
       t === 'search-tasks' ||
       t === 'get-task-details' ||
-      t === 'get_task-details'
+      t === 'get_task-details' ||
+      t === 'search-bugs' ||
+      t === 'get-bug-details' ||
+      t === 'get_bug-details'
     );
   }
 
@@ -319,9 +339,12 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       setMessages((prev) => [...prev, aiMsg]);
 
       if (maybeSteps && maybeSteps.length > 0) {
-        for (const step of maybeSteps) {
-          await executeTool(step.tool, step.args);
-        }
+        // Queue sequential steps so that create-task can set lastCreatedTaskId before create-subtask runs
+        setQueueCancelled(false);
+        setLastCreatedTaskId(null);
+        setStepQueue(maybeSteps);
+        // Start executing steps immediately
+        startNextQueuedStep();
       }
     } catch (error) {
       console.error('❌ [AI Chat] Error sending message:', error);
@@ -331,15 +354,47 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
     }
   };
 
+  async function approvePlanAndExecute() {
+    const steps = pendingPlan || [];
+    if (steps.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input || 'Proceed with the approved plan', projectId: effectiveProjectId, planApprovedSteps: steps, history: messages }),
+      });
+      const data = await res.json();
+      const content: string = data.response || '';
+      setMessages((prev) => [...prev, { role: 'assistant', content }]);
+      const maybeSteps = parseToolCallFromText(content);
+      if (maybeSteps && maybeSteps.length > 0) {
+        for (const step of maybeSteps) {
+          await executeTool(step.tool, step.args);
+        }
+      }
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to execute approved plan.' }]);
+    } finally {
+      setLoading(false);
+      setPendingPlan(null);
+    }
+  }
+
   // This function decides how to handle a tool based on its name.
   async function executeTool(tool: string, args: any) {
     let t = normalizeToolRouteName(tool);
     // Normalize alternative naming (post_breakdown-task emits 'breakdown-task' route)
     if (t === 'post-breakdown-task') t = 'breakdown-task';
+    if (t === 'post-create-subtask') t = 'create-subtask';
+    if (t === 'post-update-subtask') t = 'update-subtask';
+    if (t === 'post-delete-subtask') t = 'delete-subtask';
     const isReader =
       t.startsWith('get-') ||
       t === 'search-tasks' ||
-      t === 'get-task-details';
+      t === 'get-task-details' ||
+      t === 'search-bugs' ||
+      t === 'get-bug-details';
     const isWriter =
       t.startsWith('post-') ||
       t === 'update-task' ||
@@ -347,7 +402,16 @@ export function AIChatFloating({ projectId }: { projectId?: string }) {
       t === 'comment' ||
       t === 'delete-task' ||
       t === 'breakdown-task' ||
-      t === 'create-bug-from-text';
+      t === 'create-bug-from-text' ||
+      t === 'create-bug' ||
+      t === 'update-bug' ||
+      t === 'delete-bug' ||
+      t === 'create-subtask' ||
+      t === 'update-subtask' ||
+      t === 'delete-subtask' ||
+      t === 'post_create-subtask' ||
+      t === 'post_update-subtask' ||
+      t === 'post_delete-subtask';
 
     if (isReader) {
       await executeReaderTool(t, args);
@@ -507,6 +571,137 @@ ${JSON.stringify(data, null, 2)}
 ` }]);
           setResultMsg(summary);
         }
+      } else if (toolName === 'create-task') {
+        const res = await fetch(`/api/ai/tools/${toolName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingTool.args),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
+          setStepQueue(null);
+          setQueueCancelled(true);
+        } else {
+          const createdId = data?.task?.id || data?.id;
+          if (createdId && typeof createdId === 'string') {
+            setLastCreatedTaskId(createdId);
+          }
+          
+          // Verify creation
+          let verified = false;
+          if (createdId) {
+            try {
+              const check = await fetch(`/api/tasks/${createdId}`);
+              verified = check.ok;
+            } catch {}
+          }
+          
+          // Fallback: try to find by title within project
+          if (!verified) {
+            try {
+              const title = pendingTool.args?.title;
+              const pid = pendingTool.args?.projectId || effectiveProjectId;
+              
+              if (title && pid) {
+                const params = new URLSearchParams({ query: String(title), projectId: String(pid) });
+                const searchRes = await fetch(`/api/ai/tools/search-tasks?${params.toString()}`);
+                if (searchRes.ok) {
+                  const list = await searchRes.json();
+                  const found = Array.isArray(list?.tasks) ? list.tasks.find((t: any) => String(t?.title || '').toLowerCase() === String(title).toLowerCase()) : null;
+                  if (found?.id) {
+                    setLastCreatedTaskId(found.id);
+                    verified = true;
+                  }
+                }
+              }
+            } catch {}
+          }
+          const summary = verified
+            ? (data?.message || `Task ${createdId} created successfully.`)
+            : 'Task creation response received, but verification failed.';
+          setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+          setResultMsg(summary);
+          if (!verified) {
+            setStepQueue(null);
+            setQueueCancelled(true);
+          }
+          // If verified and we have more steps, continue the sequence
+          if (verified && stepQueue && stepQueue.length > 0) {
+            // Update step queue to remove the completed step and continue
+            const [_, ...remainingSteps] = stepQueue;
+            setStepQueue(remainingSteps);
+            if (remainingSteps.length > 0) {
+              startNextQueuedStep();
+            }
+          }
+        }
+      } else if (
+        toolName === 'create-subtask' ||
+        toolName === 'post_create-subtask' ||
+        toolName === 'update-subtask' ||
+        toolName === 'post_update-subtask' ||
+        toolName === 'delete-subtask' ||
+        toolName === 'post_delete-subtask'
+      ) {
+        const routeName = toolName.replace(/^post_/, '');
+        // Inject lastCreatedTaskId if available and taskId missing or not a valid ID (e.g., placeholder)
+        const outgoingArgs = { ...pendingTool.args };
+        
+        if (!outgoingArgs.taskId || !isIdLike(String(outgoingArgs.taskId))) {
+          if (lastCreatedTaskId) {
+            outgoingArgs.taskId = lastCreatedTaskId;
+          } else {
+            // Drop invalid placeholder to allow server-side resolution via taskTitle
+            delete outgoingArgs.taskId;
+          }
+        }
+        const res = await fetch(`/api/ai/tools/${routeName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(outgoingArgs),
+        });
+        const data = await res.json().catch(() => ({}));
+        
+        if (!res.ok) {
+          setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
+          setStepQueue(null);
+          setQueueCancelled(true);
+        } else {
+          // Verify subtask exists under the parent
+          let verified = false;
+          const parentId: string | undefined = outgoingArgs.taskId || lastCreatedTaskId || undefined;
+          const subTitle: string | undefined = outgoingArgs.title;
+          
+          if (parentId && subTitle) {
+            try {
+              const list = await fetch(`/api/tasks/${parentId}/subtasks`);
+              if (list.ok) {
+                const items = await list.json();
+                if (Array.isArray(items)) {
+                  const found = items.find((i: any) => (i?.title || '').toLowerCase() === String(subTitle).toLowerCase());
+                  verified = !!found;
+                }
+              }
+            } catch {}
+          }
+          const summary = verified ? (data?.message || 'Subtask created') : 'Subtask creation response received, but verification failed.';
+          setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+          setResultMsg(summary);
+          if (!verified) {
+            setStepQueue(null);
+            setQueueCancelled(true);
+          }
+          // If verified and we have more steps, continue the sequence
+          if (verified && stepQueue && stepQueue.length > 0) {
+            // Update step queue to remove the completed step and continue
+            const [_, ...remainingSteps] = stepQueue;
+            setStepQueue(remainingSteps);
+            if (remainingSteps.length > 0) {
+              startNextQueuedStep();
+            }
+          }
+        }
       } else {
         // Default behavior for other writer tools
         const res = await fetch(`/api/ai/tools/${toolName}`, {
@@ -528,6 +723,61 @@ ${JSON.stringify(data, null, 2)}
     } finally {
       setExecuting(false);
       setPendingTool(null);
+      // Note: Manual continuation is handled in the success paths above
+      // to ensure proper sequencing and verification
+    }
+  }
+
+  function normalizeWriterToolName(name: string): string {
+    const t = normalizeToolRouteName(name);
+    if (t === 'post-breakdown-task') return 'breakdown-task';
+    if (t === 'post-create-subtask') return 'create-subtask';
+    if (t === 'post-update-subtask') return 'update-subtask';
+    if (t === 'post-delete-subtask') return 'delete-subtask';
+    return t;
+  }
+
+  async function startNextQueuedStep() {
+    if (queueCancelled || !stepQueue || stepQueue.length === 0) {
+      setStepQueue(null);
+      return;
+    }
+    
+    // Get the next step without modifying state yet
+    const [next, ...rest] = stepQueue;
+    const t = normalizeToolRouteName(next.tool);
+    const isReader = t.startsWith('get-') || t === 'search-tasks' || t === 'get-task-details' || t === 'search-bugs' || t === 'get-bug-details';
+    const isWriter = t.startsWith('post-') || ['update-task', 'create-task', 'comment', 'delete-task', 'breakdown-task', 'create-bug-from-text', 'create-bug', 'update-bug', 'delete-bug', 'create-subtask', 'update-subtask', 'delete-subtask'].includes(normalizeWriterToolName(t));
+
+    if (isReader) {
+      await executeReaderTool(t, next.args);
+      // Update state and continue to next step
+      setStepQueue(rest);
+      if (rest.length > 0) {
+        startNextQueuedStep();
+      }
+      return;
+    }
+    
+    if (isWriter) {
+      // For create-subtask, inject lastCreatedTaskId if available
+      let args = next.args;
+      const normalized = normalizeWriterToolName(t);
+      
+      if (normalized === 'create-subtask' && !args.taskId && lastCreatedTaskId) {
+        args = { ...args, taskId: lastCreatedTaskId };
+      }
+      
+      // Set the pending tool and wait for user confirmation
+      setPendingTool({ tool: normalized, args });
+      // Don't update stepQueue yet - wait for execution to complete
+      return;
+    }
+    
+    // Unknown tool; skip to next
+    setStepQueue(rest);
+    if (rest.length > 0) {
+      startNextQueuedStep();
     }
   }
 
@@ -773,6 +1023,11 @@ ${JSON.stringify(data, null, 2)}
             <Button onClick={send} disabled={loading}>
               {loading ? '...' : 'Send'}
             </Button>
+            {pendingPlan && pendingPlan.length > 0 && (
+              <Button variant="secondary" onClick={approvePlanAndExecute} disabled={loading}>
+                Proceed
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -849,6 +1104,49 @@ ${JSON.stringify(data, null, 2)}
 {JSON.stringify({
   projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || '(missing)',
   text: pendingTool?.args?.text ? String(pendingTool?.args?.text).slice(0, 200) + (String(pendingTool?.args?.text).length > 200 ? '…' : '') : '(missing)'
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'create-subtask' ? (
+                <div className="text-sm">
+                  The AI wants to create a subtask:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || undefined,
+  taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
+  taskTitle: resolvedTaskTitle || pendingTool?.args?.taskTitle || undefined,
+  title: pendingTool?.args?.title || '(missing)',
+  assigneeName: pendingTool?.args?.assigneeName || undefined,
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'update-subtask' ? (
+                <div className="text-sm">
+                  The AI wants to update a subtask:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || undefined,
+  taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
+  taskTitle: resolvedTaskTitle || pendingTool?.args?.taskTitle || undefined,
+  subtaskId: pendingTool?.args?.subtaskId || '(missing)',
+  title: pendingTool?.args?.title,
+  isCompleted: pendingTool?.args?.isCompleted,
+  assigneeName: pendingTool?.args?.assigneeName,
+}, null, 2)}
+                  </pre>
+                  Do you want to proceed?
+                </div>
+              ) : pendingTool?.tool === 'delete-subtask' ? (
+                <div className="text-sm">
+                  The AI wants to delete a subtask:
+                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
+{JSON.stringify({
+  projectId: pendingTool?.args?.projectId || resolvedProjectId || effectiveProjectId || undefined,
+  taskId: pendingTool?.args?.taskId || resolvedTaskId || '(resolving or missing)',
+  taskTitle: resolvedTaskTitle || pendingTool?.args?.taskTitle || undefined,
+  subtaskId: pendingTool?.args?.subtaskId || '(missing)'
 }, null, 2)}
                   </pre>
                   Do you want to proceed?

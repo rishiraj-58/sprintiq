@@ -15,6 +15,13 @@
       "when": 1754988419145,
       "tag": "0001_tiny_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1755100000000,
+      "tag": "0009_ai_memory",
+      "breakpoints": true
     }
   ]
 }

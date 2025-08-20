@@ -68,6 +68,10 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
           * \`{ "tool": "get_search-tasks", "args": { "query": "string", "projectId?": "<uuid>" } }\`
       * **Get Task Details:** Use this to get all information for a single task.
           * \`{ "tool": "get_task-details", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>" } }\`
+      * **Search for Bugs:** Use this to find a list of bugs.
+          * \`{ "tool": "get_search-bugs", "args": { "query?": "string", "projectId?": "<uuid>", "status?": "open|in-progress|resolved|closed", "severity?": "low|medium|high|critical" } }\`
+      * **Get Bug Details:** Use this to get all information for a single bug.
+          * \`{ "tool": "get_bug-details", "args": { "bugId?": "<uuid>", "bugTitle?": "string", "projectId?": "<uuid>" } }\`
       `;
 
         const writeTools = `
@@ -82,8 +86,20 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
           * Alternative route name also supported: \`post_breakdown-task\` → \`/api/ai/tools/breakdown-task\`
       * **Create Bug From Text:**
           * \`{ "tool": "post_create-bug-from-text", "args": { "projectId": "<uuid>", "text": "string" } }\`
+      * **Create Bug:**
+          * \`{ "tool": "post_create-bug", "args": { "projectId?": "<uuid>", "projectName?": "string", "title": "string", "description?": "string", "severity?": "low|medium|high|critical", "assigneeName?": "string" } }\`
+      * **Update Bug:**
+          * \`{ "tool": "post_update-bug", "args": { "bugId?": "<uuid>", "bugTitle?": "string", "projectId?": "<uuid>", "status?": "open|in-progress|resolved|closed", "severity?": "low|medium|high|critical", "assigneeName?": "string" } }\`
+      * **Delete Bug:**
+          * \`{ "tool": "post_delete-bug", "args": { "bugId?": "<uuid>", "bugTitle?": "string", "projectId?": "<uuid>" } }\`
       * **Add a Comment:**
           * \`{ "tool": "post_comment", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "content": "string" } }\`
+      * **Create Subtask:**
+          * \`{ "tool": "post_create-subtask", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>", "title": "string", "assigneeName?": "string" } }\`
+      * **Update Subtask:**
+          * \`{ "tool": "post_update-subtask", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>", "subtaskId": "<uuid>", "title?": "string", "isCompleted?": true|false, "assigneeName?": "string" } }\`
+      * **Delete Subtask:**
+          * \`{ "tool": "post_delete-subtask", "args": { "taskId?": "<uuid>", "taskTitle?": "string", "projectId?": "<uuid>", "subtaskId": "<uuid>" } }\`
       `;
 
         let content = `You are SprintIQ, an intelligent AI assistant.
@@ -99,6 +115,7 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
       Respond with ONLY one of the following JSON objects:
       - \`{ "intent": "read" }\`
       - \`{ "intent": "write" }\`
+      - \`{ "intent": "plan" }\` (if the user is asking for a multi-step action that benefits from planning first)
       - \`{ "intent": "answer" }\` (if the user is asking a general question, not related to tools)
 
       Example:
@@ -107,6 +124,9 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
 
       User: "show me the details for the analytics bug"
       You respond: \`{ "intent": "read" }\`
+
+      User: "create feature, assign it to me, add a subtask"
+      You respond: \`{ "intent": "plan" }\`
 
       User: "what is agile methodology?"
       You respond: \`{ "intent": "answer" }\`
@@ -126,7 +146,10 @@ export function buildSystemMessage(context: Record<string, unknown>, intent: 're
       3.  Do NOT ask for confirmation; the client handles that.
       4.  Use names (\`taskTitle\`, \`projectName\`, \`assigneeName\`) when you don't have IDs. The system will resolve them.
       5.  If the user refers to "that task" or "it", check context.lastViewedTask for { taskId } and use it.
-      6.  Output ONLY the JSON.
+      6.  If a plan has already been approved, you may receive it in context.planApprovedSteps. Use it to guide the sequence of tool calls.
+      7.  **CRITICAL**: For multi-step operations involving task creation followed by subtask creation, use the taskTitle in the subtask creation instead of taskId. The system will automatically resolve the created task and link the subtask properly.
+      8.  **DEPENDENCIES**: When creating subtasks after task creation, always reference the parent task by its title (taskTitle), not by ID placeholders like "<uuid>".
+      9.  Output ONLY the JSON.
 
       Example:
       \`\`\`json

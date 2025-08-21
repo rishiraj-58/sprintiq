@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusChanger } from './StatusChanger';
+import { AIWorkspaceSuggestions } from '@/components/ai/AIWorkspaceSuggestions';
 import Link from 'next/link';
 
 interface Props {
@@ -56,6 +57,9 @@ export default function TasksClientPage({ workspaceId }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* AI Workspace Suggestions */}
+      <AIWorkspaceSuggestions workspaceId={workspaceId} />
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Tasks</h1>

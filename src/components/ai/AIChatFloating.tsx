@@ -702,6 +702,36 @@ ${JSON.stringify(data, null, 2)}
             }
           }
         }
+      } else if (toolName === 'create-task') {
+        const res = await fetch(`/api/ai/tools/${toolName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingTool.args),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setResultMsg(data?.error ? `Error: ${data.error}` : `Failed to execute ${toolName}`);
+        } else {
+          // Capture the created task ID for subsequent steps
+          const createdTask = data?.task || data;
+          if (createdTask?.id) {
+            setLastCreatedTaskId(createdTask.id);
+            console.log('🎯 [AI Chat] Captured created task ID:', createdTask.id);
+          }
+          
+          const summary = data?.message || `Task "${createdTask?.title || 'New Task'}" created successfully.`;
+          setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+          setResultMsg(summary);
+          
+          // Continue with next queued step if any
+          if (stepQueue && stepQueue.length > 0) {
+            const remainingSteps = stepQueue.slice(1);
+            setStepQueue(remainingSteps);
+            if (remainingSteps.length > 0) {
+              startNextQueuedStep();
+            }
+          }
+        }
       } else {
         // Default behavior for other writer tools
         const res = await fetch(`/api/ai/tools/${toolName}`, {

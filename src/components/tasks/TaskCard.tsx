@@ -17,6 +17,7 @@ import { useTask } from '@/stores/hooks/useTask';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/use-toast';
+import { AITaskSuggestions } from '@/components/ai/AITaskSuggestions';
 
 interface TaskCardProps {
   task: Task;
@@ -98,7 +99,17 @@ export function TaskCard({ task, assignee, onEdit, selectMode = false, selected 
   };
 
   const CardInner = (
-      <Card className={`hover:shadow-md transition-shadow ${selectMode ? 'cursor-default' : 'cursor-pointer'}`}>
+      <Card className={`hover:shadow-md transition-shadow ${selectMode ? 'cursor-default' : 'cursor-pointer'} relative`}>
+        {/* AI Suggestions */}
+        <AITaskSuggestions 
+          task={task} 
+          projectId={task.projectId}
+          onActionTaken={(action, taskId) => {
+            console.log('AI action taken:', action, taskId);
+            // Handle AI actions like refreshing data
+          }}
+        />
+        
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <CardTitle className="text-sm font-medium line-clamp-2">

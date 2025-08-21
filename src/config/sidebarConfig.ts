@@ -15,7 +15,8 @@ import {
   FolderOpen,
   ListTodo,
   Eye,
-  Bug
+  Bug,
+  Sparkles
 } from 'lucide-react';
 
 export type UserRole = 'owner' | 'manager' | 'member' | 'viewer';
@@ -81,6 +82,12 @@ export const sidebarConfig: SidebarConfig = {
         icon: Puzzle,
         path: '/dashboard/workspace/:workspaceId/integrations',
         description: 'Third-party app integrations'
+      },
+      {
+        title: 'AI Hub',
+        icon: Sparkles,
+        path: '/ai-hub',
+        description: 'AI-powered document generation and analysis'
       },
       {
         title: 'Organization Settings',
@@ -171,6 +178,12 @@ export const sidebarConfig: SidebarConfig = {
         icon: Puzzle,
         path: '/dashboard/workspace/:workspaceId/integrations',
         description: 'Manage integrations'
+      },
+      {
+        title: 'AI Hub',
+        icon: Sparkles,
+        path: '/ai-hub',
+        description: 'AI-powered tools and document generation'
       }
     ],
     project: [
@@ -243,6 +256,12 @@ export const sidebarConfig: SidebarConfig = {
         icon: BarChart3,
         path: '/dashboard/workspace/:workspaceId/reports',
         description: 'Personal performance dashboard'
+      },
+      {
+        title: 'AI Hub',
+        icon: Sparkles,
+        path: '/ai-hub',
+        description: 'AI-powered assistance and document generation'
       }
     ],
     project: [
@@ -291,6 +310,12 @@ export const sidebarConfig: SidebarConfig = {
         icon: Eye,
         path: '/dashboard/workspace/:workspaceId',
         description: 'View projects you have access to'
+      },
+      {
+        title: 'AI Hub',
+        icon: Sparkles,
+        path: '/ai-hub',
+        description: 'AI-powered insights and documentation'
       }
     ],
     project: [

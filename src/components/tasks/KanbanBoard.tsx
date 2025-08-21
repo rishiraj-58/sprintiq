@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AIBoardSuggestions } from '@/components/ai/AIBoardSuggestions';
 
 interface KanbanBoardProps {
   projectId: string;
@@ -98,6 +99,9 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
   return (
     <>
+      {/* AI Board Suggestions */}
+      <AIBoardSuggestions projectId={projectId} className="mb-6" />
+      
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Button variant={bulkMode ? 'default' : 'outline'} size="sm" onClick={() => { setBulkMode(!bulkMode); clearSelection(); }}>

@@ -23,7 +23,7 @@ export async function generateAIResponse({
 }: GenerateAIResponseParams): Promise<string> {
   const apiBase = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1';
   const apiKey = process.env.OPENAI_API_KEY || process.env.GITHUB_TOKEN;
-  const chosenModel = model || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const chosenModel = model || process.env.OPENAI_MODEL || 'gpt-4o';
 
   if (!apiKey) {
     throw new Error('AI API key is not configured. Set OPENAI_API_KEY or GITHUB_TOKEN');

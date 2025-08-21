@@ -44,8 +44,14 @@ export async function POST(request: NextRequest) {
         headers,
         body: JSON.stringify({ name: assigneeName, context: { projectId } }),
       });
-      const data = await res.json();
-      if (res.ok && data?.best?.id) finalAssigneeId = String(data.best.id);
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          if (data?.best?.id) finalAssigneeId = String(data.best.id);
+        } catch (e) {
+          console.warn('Failed to parse resolve-user response:', e);
+        }
+      }
     }
 
     const headers = new Headers();

@@ -55,18 +55,23 @@ async function seedReports(request: Request, { params }: { params: { projectId: 
       createdSprints.push({ id: s.id, name: s.name, startDate, endDate });
     }
 
-    // Create backlog tasks (no sprint) to populate backlog/CFD
+    // Create backlog tasks
     const backlogTasksToCreate = [
       { title: 'Seed Backlog Task A', storyPoints: 3 },
       { title: 'Seed Backlog Task B', storyPoints: 5 },
       { title: 'Seed Backlog Task C', storyPoints: 2 },
     ];
     const createdBacklogTasks: Array<{ id: string; createdAt: Date }> = [];
+    
+    // Get the next project_task_id for this project
+    let nextProjectTaskId = 1;
+    
     for (const t of backlogTasksToCreate) {
       const createdAt = addDays(today, -20);
       const [row] = await db
         .insert(tasks)
         .values({
+          projectTaskId: nextProjectTaskId++,
           projectId,
           title: t.title,
           description: 'Seeded task (backlog) for reports demo',
@@ -97,6 +102,7 @@ async function seedReports(request: Request, { params }: { params: { projectId: 
         const [taskRow] = await db
           .insert(tasks)
           .values({
+            projectTaskId: nextProjectTaskId++,
             projectId,
             title,
             description: 'Seeded task for reports demo',
@@ -145,6 +151,7 @@ async function seedReports(request: Request, { params }: { params: { projectId: 
         const [tRow] = await db
           .insert(tasks)
           .values({
+            projectTaskId: nextProjectTaskId++,
             projectId,
             title: `Seed ${currentSprint.name} Active ${i + 1}`,
             description: 'Active seeded task',

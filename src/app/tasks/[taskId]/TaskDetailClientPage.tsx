@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Calendar, Clock, User, ArrowLeft, Edit, Save, X, Plus } from 'lucide-react';
+import { Calendar, Clock, User, ArrowLeft, Edit, Save, X, Plus, GitBranch, ExternalLink, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useTask } from '@/stores/hooks/useTask';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -29,6 +29,7 @@ import dynamic from 'next/dynamic';
 
 interface TaskDetailData {
   id: string;
+  projectTaskId: number;
   title: string;
   description: string | null;
   status: string;
@@ -42,6 +43,7 @@ interface TaskDetailData {
   workspaceId: string;
   project: {
     id: string;
+    key: string;
     name: string;
     description: string | null;
   };
@@ -59,6 +61,39 @@ interface TaskDetailData {
     email: string | null;
     avatarUrl: string | null;
   } | null;
+}
+
+interface GitHubPullRequest {
+  id: string;
+  githubPrNumber: number;
+  title: string;
+  state: string;
+  isDraft: boolean;
+  headBranch: string;
+  baseBranch: string;
+  authorLogin: string;
+  githubCreatedAt: Date;
+  checksStatus: string;
+  reviewStatus: string;
+  repositoryFullName: string;
+}
+
+interface GitHubActivity {
+  id: string;
+  activityType: string;
+  actorLogin: string;
+  title: string;
+  description: string | null;
+  githubUrl: string | null;
+  githubCreatedAt: Date;
+  repositoryFullName: string;
+}
+
+interface LinkedRepository {
+  id: string;
+  repositoryName: string;
+  repositoryFullName: string;
+  defaultBranch: string;
 }
 
 interface TaskDetailClientPageProps {
@@ -86,12 +121,58 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const [assigneeId, setAssigneeId] = useState(task.assignee?.id || 'unassigned');
   const [isSaving, setIsSaving] = useState(false);
 
+  // GitHub integration state
+  const [linkedRepositories, setLinkedRepositories] = useState<LinkedRepository[]>([]);
+  const [pullRequests, setPullRequests] = useState<GitHubPullRequest[]>([]);
+  const [githubActivities, setGithubActivities] = useState<GitHubActivity[]>([]);
+  const [isCreatingBranch, setIsCreatingBranch] = useState(false);
+  const [githubLoading, setGithubLoading] = useState(true);
+
+  // Generate human-readable task ID
+  const humanTaskId = `${task.project.key}-${task.projectTaskId}`;
+
   // Fetch workspace members when component mounts
   useEffect(() => {
     if (task.workspaceId && workspaceMembers.length === 0) {
       fetchWorkspaceMembers(task.workspaceId);
     }
   }, [task.workspaceId, workspaceMembers.length, fetchWorkspaceMembers]);
+
+  // Load GitHub integration data
+  useEffect(() => {
+    const loadGithubData = async () => {
+      try {
+        setGithubLoading(true);
+
+        // Load linked repositories for this project
+        const reposRes = await fetch(`/api/projects/${task.projectId}/repositories`);
+        if (reposRes.ok) {
+          const reposData = await reposRes.json();
+          setLinkedRepositories(reposData.repositories || []);
+        }
+
+        // Load pull requests for this task
+        const prsRes = await fetch(`/api/tasks/${task.id}/github/pull-requests`);
+        if (prsRes.ok) {
+          const prsData = await prsRes.json();
+          setPullRequests(prsData.pullRequests || []);
+        }
+
+        // Load GitHub activities for this task
+        const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+        if (activitiesRes.ok) {
+          const activitiesData = await activitiesRes.json();
+          setGithubActivities(activitiesData.activities || []);
+        }
+      } catch (error) {
+        console.error('Error loading GitHub data:', error);
+      } finally {
+        setGithubLoading(false);
+      }
+    };
+
+    loadGithubData();
+  }, [task.id, task.projectId]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -176,8 +257,86 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
     handleSave();
   };
 
+  const createBranch = async (repositoryId: string, repositoryName: string) => {
+    if (!linkedRepositories.find(repo => repo.id === repositoryId)) {
+      toast({
+        title: 'Error',
+        description: 'Repository not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsCreatingBranch(true);
+    try {
+      const response = await fetch('/api/github/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          repositoryId,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: 'Branch Created',
+          description: `Successfully created branch ${data.branch.name}`,
+        });
+        
+        // Open the new branch in GitHub
+        if (data.branch.url) {
+          window.open(data.branch.url, '_blank');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create branch');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create branch',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingBranch(false);
+    }
+  };
+
+  const getBranchName = (title: string) => {
+    return `feature/${humanTaskId.toLowerCase()}-${title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .substring(0, 50)
+      .replace(/-+$/, '')}`;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+      case 'failure':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
+      default:
+        return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />;
+    }
+  };
+
+  const getReviewStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+      case 'changes_requested':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
+      default:
+        return <Clock className="h-4 w-4 text-yellow-600" />;
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -189,7 +348,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
             <p className="text-sm text-muted-foreground">
               Project: <Link href={`/projects/${task.project.id}`} className="hover:underline text-primary">{task.project.name}</Link>
               <span className="mx-2">•</span>
-              <span className="font-mono text-xs">{task.id.slice(0, 8).toUpperCase()}</span>
+              <span className="font-mono text-sm font-bold">{humanTaskId}</span>
             </p>
             <input
               className="w-full bg-transparent text-3xl font-bold outline-none focus:ring-0"
@@ -209,8 +368,8 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
       </div>
 
       {/* Top two-column grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: main content (70%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left: main content (60%) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Description */}
           <Card>
@@ -229,6 +388,55 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
             </CardContent>
           </Card>
 
+          {/* Unified Activity Feed */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {githubLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading activity...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {githubActivities.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No development activity yet. Create a branch to get started!
+                      </p>
+                    ) : (
+                      githubActivities.map((activity) => (
+                        <div key={activity.id} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                          <GitBranch className="h-4 w-4 text-muted-foreground mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{activity.title}</p>
+                            {activity.description && (
+                              <p className="text-xs text-muted-foreground mt-1">{activity.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                              <span>{activity.actorLogin}</span>
+                              <span>•</span>
+                              <span>{new Date(activity.githubCreatedAt).toLocaleDateString()}</span>
+                              <span>•</span>
+                              <span>{activity.repositoryFullName}</span>
+                            </div>
+                          </div>
+                          {activity.githubUrl && (
+                            <Button variant="ghost" size="sm" onClick={() => window.open(activity.githubUrl!, '_blank')}>
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Subtasks */}
           <SubTasks taskId={task.id} workspaceId={task.workspaceId} />
 
@@ -236,7 +444,137 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           <LinkedTasks taskId={task.id} projectId={task.project.id} workspaceId={task.workspaceId} />
         </div>
 
-        {/* Right: metadata panel (30%) */}
+        {/* Development Panel (20%) */}
+        <div className="space-y-6">
+          {linkedRepositories.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  Development
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Create Branch */}
+                <div className="space-y-3">
+                  <div className="text-sm">
+                    <p className="font-medium mb-1">Create Branch</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Suggested: {getBranchName(title)}
+                    </p>
+                  </div>
+                  
+                  {linkedRepositories.length === 1 ? (
+                    <Button
+                      onClick={() => createBranch(linkedRepositories[0].id, linkedRepositories[0].repositoryName)}
+                      disabled={isCreatingBranch}
+                      size="sm"
+                      className="w-full"
+                    >
+                      {isCreatingBranch ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <GitBranch className="h-3 w-3 mr-2" />
+                          Create Branch
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Select onValueChange={(repoId) => {
+                      const repo = linkedRepositories.find(r => r.id === repoId);
+                      if (repo) createBranch(repo.id, repo.repositoryName);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose repository" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {linkedRepositories.map((repo) => (
+                          <SelectItem key={repo.id} value={repo.id}>
+                            {repo.repositoryName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Pull Requests */}
+                <div className="space-y-3">
+                  <p className="font-medium text-sm">Pull Requests</p>
+                  {pullRequests.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No pull requests yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pullRequests.map((pr) => (
+                        <div key={pr.id} className="p-2 border rounded-md space-y-2">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium truncate">{pr.title}</p>
+                              <p className="text-xs text-muted-foreground">#{pr.githubPrNumber} • {pr.authorLogin}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`https://github.com/${pr.repositoryFullName}/pull/${pr.githubPrNumber}`, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              {getStatusIcon(pr.checksStatus)}
+                              <span className="text-xs capitalize">{pr.checksStatus}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {getReviewStatusIcon(pr.reviewStatus)}
+                              <span className="text-xs capitalize">{pr.reviewStatus.replace('_', ' ')}</span>
+                            </div>
+                          </div>
+                          
+                          <Badge 
+                            variant={pr.state === 'open' ? 'default' : pr.state === 'merged' ? 'secondary' : 'outline'}
+                            className="text-xs"
+                          >
+                            {pr.isDraft ? 'Draft' : pr.state}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  Development
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-4">
+                  <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground mb-2">No GitHub repositories linked</p>
+                  <Link href={`/projects/${task.projectId}/settings?tab=integrations`}>
+                    <Button variant="outline" size="sm">
+                      Link Repository
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Details Panel (20%) */}
         <div className="space-y-6">
           {/* Status */}
           <Card>
@@ -316,13 +654,6 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                   disabled={!canEdit || isSaving}
                 />
               </div>
-
-              {/* Labels */}
-              <div className="space-y-2">
-                <Label>Labels</Label>
-                <Input placeholder="Add labels (comma separated)" disabled />
-                <p className="text-xs text-muted-foreground">Labels UI coming next.</p>
-              </div>
             </CardContent>
           </Card>
 
@@ -344,16 +675,12 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                   <span>{new Date(task.updatedAt).toLocaleDateString()}</span>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Due Date</Label>
-                <Input type="date" disabled />
-              </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Bottom: activity tabs full width */}
+      {/* Bottom: additional content tabs full width */}
       <div className="mt-8">
         <Tabs defaultValue="comments">
           <TabsList>

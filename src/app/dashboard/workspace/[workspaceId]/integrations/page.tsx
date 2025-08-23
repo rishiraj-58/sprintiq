@@ -1,24 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-
+import { useToast } from '@/components/ui/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
-import { 
-  Search, 
-  Filter, 
-  Settings, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Search,
+  Filter,
+  Settings,
   Plus,
   CheckCircle2,
   Circle,
@@ -35,7 +43,8 @@ import {
   GitBranch,
   Cloud,
   Smartphone,
-  Calendar
+  Calendar,
+  X
 } from 'lucide-react';
 
 // Static integrations data
@@ -178,6 +187,129 @@ export default function IntegrationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [githubIntegration, setGithubIntegration] = useState<any>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [availableRepositories, setAvailableRepositories] = useState<any[]>([]);
+  const [linkedRepositories, setLinkedRepositories] = useState<any[]>([]);
+  const [repositoriesLoading, setRepositoriesLoading] = useState(false);
+  const [showRepositoryManager, setShowRepositoryManager] = useState(false);
+  
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const workspaceId = params.workspaceId as string;
+
+  // Check for success messages from OAuth callback
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const error = searchParams.get('error');
+    
+    if (success === 'github_connected') {
+      toast({
+        title: 'GitHub Connected',
+        description: 'Successfully connected GitHub to your workspace.',
+      });
+      // Remove query params from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (error) {
+      toast({
+        title: 'Connection Failed',
+        description: 'Failed to connect GitHub integration.',
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams, toast]);
+
+  // Fetch GitHub integration status and repositories
+  useEffect(() => {
+    const fetchGithubIntegration = async () => {
+      try {
+        const res = await fetch(`/api/github/status?workspace_id=${workspaceId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setGithubIntegration(data.integration);
+        }
+      } catch (error) {
+        console.error('Error fetching GitHub integration:', error);
+      }
+    };
+
+    if (workspaceId) {
+      fetchGithubIntegration();
+    }
+  }, [workspaceId]);
+
+  // Fetch repositories when GitHub integration is available
+  const loadRepositories = async () => {
+    if (!githubIntegration) return;
+
+    try {
+      setRepositoriesLoading(true);
+
+      // Fetch available repositories
+      const reposRes = await fetch(`/api/github/repositories?workspace_id=${workspaceId}`);
+      if (reposRes.ok) {
+        const reposData = await reposRes.json();
+        setAvailableRepositories(reposData.repositories || []);
+      }
+    } catch (error) {
+      console.error('Error loading repositories:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load GitHub repositories.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRepositoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (githubIntegration && showRepositoryManager) {
+      loadRepositories();
+    }
+  }, [githubIntegration, showRepositoryManager]);
+
+  const handleGithubConnect = async () => {
+    setIsConnecting(true);
+    try {
+      window.location.href = `/api/github/auth?workspace_id=${workspaceId}`;
+    } catch (error) {
+      toast({
+        title: 'Connection Error',
+        description: 'Failed to initiate GitHub connection.',
+        variant: 'destructive',
+      });
+      setIsConnecting(false);
+    }
+  };
+
+  const handleGithubDisconnect = async () => {
+    try {
+      const res = await fetch(`/api/github/disconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId }),
+      });
+
+      if (res.ok) {
+        setGithubIntegration(null);
+        toast({
+          title: 'GitHub Disconnected',
+          description: 'Successfully disconnected GitHub integration.',
+        });
+      } else {
+        throw new Error('Failed to disconnect');
+      }
+    } catch (error) {
+      toast({
+        title: 'Disconnection Error',
+        description: 'Failed to disconnect GitHub integration.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -202,7 +334,23 @@ export default function IntegrationsPage() {
     }
   };
 
-  const filteredIntegrations = integrations.filter(integration => {
+  // Update integrations data with real GitHub status
+  const updatedIntegrations = integrations.map(integration => {
+    if (integration.id === 'github') {
+      return {
+        ...integration,
+        connected: !!githubIntegration,
+        connectionDate: githubIntegration?.createdAt ? new Date(githubIntegration.createdAt).toISOString().split('T')[0] : undefined,
+        config: githubIntegration ? {
+          organization: githubIntegration.githubOrgName,
+          repositories: availableRepositories,
+        } : undefined,
+      };
+    }
+    return integration;
+  });
+
+  const filteredIntegrations = updatedIntegrations.filter(integration => {
     const matchesSearch = !searchQuery || 
       integration.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       integration.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -215,7 +363,7 @@ export default function IntegrationsPage() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  const connectedCount = integrations.filter(i => i.connected).length;
+  const connectedCount = updatedIntegrations.filter(i => i.connected).length;
 
   return (
     <div className="space-y-6">
@@ -429,18 +577,36 @@ export default function IntegrationsPage() {
                 <div className="pt-2 border-t space-y-2">
                   {integration.connected ? (
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 gap-1"
+                        disabled={integration.id !== 'github'}
+                        onClick={() => integration.id === 'github' && setShowRepositoryManager(true)}
+                      >
                         <Settings className="h-3 w-3" />
                         Configure
                       </Button>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
+                      {integration.id === 'github' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-1"
+                          onClick={handleGithubDisconnect}
+                        >
+                          Disconnect
+                        </Button>
+                      )}
                     </div>
                   ) : (
-                    <Button size="sm" className="w-full gap-1">
+                    <Button 
+                      size="sm" 
+                      className="w-full gap-1"
+                      onClick={integration.id === 'github' ? handleGithubConnect : undefined}
+                      disabled={integration.id !== 'github' || isConnecting}
+                    >
                       <Plus className="h-3 w-3" />
-                      Connect
+                      {integration.id === 'github' && isConnecting ? 'Connecting...' : 'Connect'}
                     </Button>
                   )}
                   
@@ -471,6 +637,115 @@ export default function IntegrationsPage() {
           </div>
         </Card>
       )}
+
+      {/* GitHub Repository Manager Dialog */}
+      <Dialog open={showRepositoryManager} onOpenChange={setShowRepositoryManager}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              GitHub Repository Manager
+            </DialogTitle>
+            <DialogDescription>
+              Manage repositories for your workspace. These repositories will be available for linking to projects.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Integration Status */}
+            {githubIntegration && (
+              <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <div>
+                    <h4 className="font-medium text-green-900">GitHub Connected</h4>
+                    <p className="text-sm text-green-700">
+                      Organization: {githubIntegration.githubOrgName}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGithubDisconnect}
+                >
+                  Disconnect
+                </Button>
+              </div>
+            )}
+
+            {/* Available Repositories */}
+            <div>
+              <h4 className="font-medium mb-4">Available Repositories</h4>
+
+              {repositoriesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                </div>
+              ) : availableRepositories.length === 0 ? (
+                <div className="text-center py-8 bg-muted/50 rounded-lg">
+                  <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground mb-4">
+                    No repositories found. Make sure you have access to repositories in the organization.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={loadRepositories}
+                    className="gap-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {availableRepositories.map((repo: any) => (
+                    <div key={repo.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <GitBranch className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <h5 className="font-medium text-sm">{repo.name}</h5>
+                          <p className="text-xs text-muted-foreground">{repo.fullName}</p>
+                          {repo.description && (
+                            <p className="text-xs text-muted-foreground mt-1">{repo.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {repo.isPrivate ? 'Private' : 'Public'}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {repo.defaultBranch}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(repo.htmlUrl, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Info Section */}
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-900 mb-2">How to use repositories</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Repositories listed here are available from your connected GitHub organization</li>
+                <li>• To link a repository to a specific project, go to Project Settings → Integrations</li>
+                <li>• Once linked, you can create branches and track PRs directly from tasks</li>
+                <li>• Repository access requires appropriate GitHub permissions</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Request Custom Integration */}
       <Card>

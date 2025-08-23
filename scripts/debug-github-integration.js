@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+
+console.log('🔍 GitHub Integration Debug Instructions');
+console.log('=====================================');
+console.log('');
+console.log('1. Check your current workspace ID:');
+console.log('   - Go to your SprintIQ dashboard');
+console.log('   - Look at the URL: /dashboard/workspace/[WORKSPACE_ID]');
+console.log('   - Copy the WORKSPACE_ID from the URL');
+console.log('');
+console.log('2. Test GitHub integration status:');
+console.log('   curl -X GET "http://localhost:3000/api/github/status?workspace_id=YOUR_WORKSPACE_ID"');
+console.log('');
+console.log('3. If you get "GitHub not connected", you need to:');
+console.log('   - Go to Dashboard → Workspace Settings → Integrations');
+console.log('   - Connect your GitHub account');
+console.log('   - Authorize the GitHub organization');
+console.log('');
+console.log('4. If you get integration details, test repositories:');
+console.log('   curl -X GET "http://localhost:3000/api/github/repositories?workspace_id=YOUR_WORKSPACE_ID"');
+console.log('');
+console.log('5. Check your project settings:');
+console.log('   - Go to your project settings page');
+console.log('   - Navigate to the "Integrations" tab');
+console.log('   - The available repositories should now be listed');
+console.log('   - Click the "+" button to link a repository');
+console.log('');
+console.log('6. If repositories are not showing, check:');
+console.log('   - Your GitHub token has the correct permissions');
+console.log('   - The organization name matches exactly');
+console.log('   - You have access to the organization\'s repositories');
+console.log('');
+console.log('7. After linking repositories, refresh the project settings page');
+console.log('   - The linked repositories should appear in the "Linked Repositories" section');
+console.log('   - You should now be able to create branches and track PRs');
+console.log('');

@@ -28,19 +28,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { 
-  Settings, 
-  Save, 
-  AlertTriangle, 
-  Archive, 
+import {
+  Settings,
+  Save,
+  AlertTriangle,
+  Archive,
   Trash2,
   Plus,
   X,
@@ -51,7 +52,13 @@ import {
   Shield,
   Users,
   Calendar,
-  Tag
+  Tag,
+  GitBranch,
+  CheckCircle2,
+  Circle,
+  ExternalLink,
+  AlertCircle,
+  Search
 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -67,7 +74,8 @@ const defaultProjectSettings = {
     startDate: '',
     targetEndDate: '',
     budget: 0,
-    currency: 'USD'
+    currency: 'USD',
+    workspaceId: ''
   },
   
   workflow: {
@@ -137,6 +145,15 @@ export default function SettingsPage({ params }: SettingsPageProps) {
   const [taskStatuses, setTaskStatuses] = useState<any[]>([]);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<'active' | 'planning' | 'completed' | 'archived'>('active');
+  
+  // GitHub integration state
+  const [githubIntegration, setGithubIntegration] = useState<any>(null);
+  const [availableRepositories, setAvailableRepositories] = useState<any[]>([]);
+  const [linkedRepositories, setLinkedRepositories] = useState<any[]>([]);
+  const [repositoriesLoading, setRepositoriesLoading] = useState(false);
+  const [repositoriesError, setRepositoriesError] = useState<string | null>(null);
+  const [showAllReposDialog, setShowAllReposDialog] = useState(false);
+  const [repoSearchQuery, setRepoSearchQuery] = useState('');
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -158,7 +175,8 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               startDate: projectData.startDate ? new Date(projectData.startDate).toISOString().split('T')[0] : '',
               targetEndDate: projectData.targetEndDate ? new Date(projectData.targetEndDate).toISOString().split('T')[0] : '',
               budget: projectData.budget || 0,
-              currency: projectData.currency || 'USD'
+              currency: projectData.currency || 'USD',
+              workspaceId: projectData.workspaceId || ''
             }
           }));
           setProjectStatus((projectData.status || 'active') as any);
@@ -189,6 +207,116 @@ export default function SettingsPage({ params }: SettingsPageProps) {
       loadProjectData();
     }
   }, [user?.id, params.projectId]);
+
+  // Load GitHub integration data
+  const loadGithubIntegrationData = async () => {
+    try {
+      setRepositoriesLoading(true);
+      
+      // Get project data to find workspace ID
+      const projectRes = await fetch(`/api/projects/${params.projectId}`);
+      if (!projectRes.ok) return;
+      
+      const projectData = await projectRes.json();
+      const workspaceId = projectData.workspaceId;
+      
+      // Check GitHub integration status
+      const integrationRes = await fetch(`/api/github/status?workspace_id=${workspaceId}`);
+      if (integrationRes.ok) {
+        const integrationData = await integrationRes.json();
+        setGithubIntegration(integrationData.integration);
+        
+        if (integrationData.integration) {
+          console.log('Loading repositories for workspace:', workspaceId);
+          setRepositoriesLoading(true);
+          setRepositoriesError(null);
+
+          // Load available repositories
+          const reposRes = await fetch(`/api/github/repositories?workspace_id=${workspaceId}`);
+          console.log('Repositories response status:', reposRes.status);
+          if (reposRes.ok) {
+            const reposData = await reposRes.json();
+            console.log('Repositories data:', reposData);
+            setAvailableRepositories(reposData.repositories || []);
+          } else {
+            const errorText = await reposRes.text();
+            console.error('Failed to fetch repositories:', errorText);
+            setRepositoriesError(`Failed to load repositories: ${errorText}`);
+          }
+          
+          // Load linked repositories for this project
+          const linkedRes = await fetch(`/api/projects/${params.projectId}/repositories`);
+          if (linkedRes.ok) {
+            const linkedData = await linkedRes.json();
+            setLinkedRepositories(linkedData.repositories || []);
+          } else {
+            console.error('Failed to fetch linked repositories:', await linkedRes.text());
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading GitHub integration data:', error);
+      setRepositoriesError('Failed to load GitHub integration data');
+    } finally {
+      setRepositoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (params.projectId) {
+      loadGithubIntegrationData();
+    }
+  }, [params.projectId]);
+
+  const linkRepository = async (repository: any) => {
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/repositories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubIntegrationId: githubIntegration.id,
+          repositoryName: repository.name,
+          repositoryFullName: repository.fullName,
+          githubRepoId: repository.id,
+          defaultBranch: repository.defaultBranch,
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh linked repositories
+        await loadGithubIntegrationData();
+        setSaveMessage('Repository linked successfully');
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        throw new Error('Failed to link repository');
+      }
+    } catch (error) {
+      console.error('Error linking repository:', error);
+      setSaveMessage('Failed to link repository');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
+
+  const unlinkRepository = async (repositoryId: string) => {
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/repositories/${repositoryId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Refresh linked repositories
+        await loadGithubIntegrationData();
+        setSaveMessage('Repository unlinked successfully');
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        throw new Error('Failed to unlink repository');
+      }
+    } catch (error) {
+      console.error('Error unlinking repository:', error);
+      setSaveMessage('Failed to unlink repository');
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
 
   const refreshProjectStatus = async () => {
     try {
@@ -401,9 +529,10 @@ export default function SettingsPage({ params }: SettingsPageProps) {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="danger">Danger Zone</TabsTrigger>
@@ -748,6 +877,164 @@ export default function SettingsPage({ params }: SettingsPageProps) {
           </div>
         </TabsContent>
 
+        {/* Integrations */}
+        <TabsContent value="integrations" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                GitHub Integration
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!githubIntegration ? (
+                <div className="text-center py-8">
+                  <div className="mx-auto h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <GitBranch className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-medium mb-2">GitHub Not Connected</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Connect your workspace to GitHub to link repositories to this project.
+                  </p>
+                  <Button onClick={() => router.push(`/dashboard/workspace/${settings.general.workspaceId}?tab=integrations`)}>
+                    Connect GitHub
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Integration Status */}
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <div>
+                        <h4 className="font-medium text-green-900">GitHub Connected</h4>
+                        <p className="text-sm text-green-700">
+                          Organization: {githubIntegration.githubOrgName}
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/workspace/${settings.general.workspaceId}?tab=integrations`)}
+                    >
+                      Manage
+                    </Button>
+                  </div>
+
+                  {/* Repository Linking */}
+                  <div>
+                    <h4 className="font-medium mb-4">Linked Repositories</h4>
+
+                    {repositoriesLoading ? (
+                      <div className="text-center py-4">
+                        <p className="text-sm text-muted-foreground">Loading repositories...</p>
+                      </div>
+                    ) : repositoriesError ? (
+                      <div className="text-center py-6 bg-destructive/10 rounded-lg border border-destructive/20">
+                        <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                        <p className="text-sm text-destructive mb-2">Failed to load repositories</p>
+                        <p className="text-xs text-muted-foreground">{repositoriesError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={loadGithubIntegrationData}
+                        >
+                          Try Again
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {linkedRepositories.length === 0 ? (
+                          <div className="text-center py-6 bg-muted/50 rounded-lg">
+                            <Circle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground mb-4">
+                              No repositories linked to this project yet.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid gap-3">
+                            {linkedRepositories.map((repo: any) => (
+                              <div key={repo.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex items-center gap-3">
+                                  <GitBranch className="h-4 w-4 text-muted-foreground" />
+                                  <div>
+                                    <h5 className="font-medium">{repo.repositoryName}</h5>
+                                    <p className="text-sm text-muted-foreground">{repo.repositoryFullName}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(`https://github.com/${repo.repositoryFullName}`, '_blank')}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => unlinkRepository(repo.id)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Available Repositories */}
+                        {availableRepositories.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h5 className="font-medium text-sm">Available Repositories</h5>
+                              {availableRepositories.length > 3 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowAllReposDialog(true)}
+                                  className="text-xs"
+                                >
+                                  See All ({availableRepositories.length})
+                                </Button>
+                              )}
+                            </div>
+                            <div className="grid gap-2">
+                              {availableRepositories
+                                .filter(repo => !linkedRepositories.some(linked => linked.githubRepoId === repo.id))
+                                .slice(0, 3)
+                                .map((repo: any) => (
+                                <div key={repo.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/25">
+                                  <div className="flex items-center gap-3">
+                                    <GitBranch className="h-4 w-4 text-muted-foreground" />
+                                    <div className="flex-1 min-w-0">
+                                      <h6 className="font-medium text-sm truncate">{repo.name}</h6>
+                                      <p className="text-xs text-muted-foreground truncate">{repo.fullName}</p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => linkRepository(repo)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Notifications */}
         <TabsContent value="notifications" className="space-y-6">
           <Card>
@@ -1061,6 +1348,99 @@ export default function SettingsPage({ params }: SettingsPageProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* All Repositories Dialog */}
+      <Dialog open={showAllReposDialog} onOpenChange={setShowAllReposDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              All Available Repositories
+            </DialogTitle>
+            <DialogDescription>
+              Search and link GitHub repositories to this project
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Search */}
+          <div className="flex items-center space-x-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search repositories..."
+                value={repoSearchQuery}
+                onChange={(e) => setRepoSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {/* Repository List */}
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {availableRepositories
+              .filter(repo =>
+                !linkedRepositories.some(linked => linked.githubRepoId === repo.id) &&
+                (repo.name.toLowerCase().includes(repoSearchQuery.toLowerCase()) ||
+                 repo.fullName.toLowerCase().includes(repoSearchQuery.toLowerCase()) ||
+                 (repo.description && repo.description.toLowerCase().includes(repoSearchQuery.toLowerCase())))
+              )
+              .map((repo: any) => (
+              <div key={repo.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <GitBranch className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h6 className="font-medium text-sm truncate">{repo.name}</h6>
+                    <p className="text-xs text-muted-foreground truncate">{repo.fullName}</p>
+                    {repo.description && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{repo.description}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(repo.htmlUrl, '_blank')}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      linkRepository(repo);
+                      setShowAllReposDialog(false);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {availableRepositories.filter(repo =>
+              !linkedRepositories.some(linked => linked.githubRepoId === repo.id) &&
+              (repo.name.toLowerCase().includes(repoSearchQuery.toLowerCase()) ||
+               repo.fullName.toLowerCase().includes(repoSearchQuery.toLowerCase()) ||
+               (repo.description && repo.description.toLowerCase().includes(repoSearchQuery.toLowerCase())))
+            ).length === 0 && (
+              <div className="text-center py-8">
+                <Search className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {repoSearchQuery ? 'No repositories match your search' : 'No repositories available'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAllReposDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

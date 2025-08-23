@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import MemberTasksPage from './MemberTasksPage';
+import { CreateTaskForm } from '@/components/tasks/CreateTaskForm';
 import { useTask } from '@/stores/hooks/useTask';
 import { useProject } from '@/stores/hooks/useProject';
 
@@ -203,27 +204,12 @@ export default function TasksPage({ params }: TasksPageProps) {
             Manage and track all project tasks and backlog items
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button size="lg" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Task</DialogTitle>
-              <DialogDescription>
-                Add a new task to the project backlog
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <p className="text-sm text-muted-foreground">
-                CreateTaskForm component would be integrated here
-              </p>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <CreateTaskForm projectId={params.projectId}>
+          <Button size="lg" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Create Task
+          </Button>
+        </CreateTaskForm>
       </div>
 
       {/* Stats Cards */}

@@ -67,9 +67,20 @@ export async function POST(req: NextRequest) {
       return new Response('Forbidden', { status: 403 });
     }
 
+    // Get the next project_task_id for this project
+    const [lastTask] = await db
+      .select({ projectTaskId: tasks.projectTaskId })
+      .from(tasks)
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(tasks.projectTaskId)
+      .limit(1);
+    
+    const nextProjectTaskId = lastTask ? lastTask.projectTaskId + 1 : 1;
+
     const [t] = await db
       .insert(tasks)
       .values({
+        projectTaskId: nextProjectTaskId,
         title: String(title).slice(0, 200),
         description: details ?? null,
         status,

@@ -1,0 +1,310 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "id": "0010_add_project_key_and_task_id",
+  "prevId": "0003_strong_kingpin",
+  "tables": {
+    "projects": {
+      "name": "projects",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "target_end_date": {
+          "name": "target_end_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "budget": {
+          "name": "budget",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "projects_workspace_id_workspaces_id_fk": {
+          "name": "projects_workspace_id_workspaces_id_fk",
+          "tableName": "projects",
+          "columns": ["workspace_id"],
+          "foreignTableName": "workspaces",
+          "foreignColumns": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "projects_owner_id_profiles_id_fk": {
+          "name": "projects_owner_id_profiles_id_fk",
+          "tableName": "projects",
+          "columns": ["owner_id"],
+          "foreignTableName": "profiles",
+          "foreignColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "uniqueConstraints": {
+        "projects_key_unique": {
+          "name": "projects_key_unique",
+          "columns": ["key"]
+        }
+      }
+    },
+    "tasks": {
+      "name": "tasks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "project_task_id": {
+          "name": "project_task_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'feature'"
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'todo'"
+        },
+        "priority": {
+          "name": "priority",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'medium'"
+        },
+        "project_id": {
+          "name": "project_id",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "assignee_id": {
+          "name": "assignee_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "creator_id": {
+          "name": "creator_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": null
+        },
+        "sprint_id": {
+          "name": "sprint_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "story_points": {
+          "name": "story_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tasks_project_id_projects_id_fk": {
+          "name": "tasks_project_id_projects_id_fk",
+          "tableName": "tasks",
+          "columns": ["project_id"],
+          "foreignTableName": "projects",
+          "foreignColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tasks_assignee_id_profiles_id_fk": {
+          "name": "tasks_assignee_id_profiles_id_fk",
+          "tableName": "tasks",
+          "columns": ["assignee_id"],
+          "foreignTableName": "profiles",
+          "foreignColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tasks_creator_id_profiles_id_fk": {
+          "name": "tasks_creator_id_profiles_id_fk",
+          "tableName": "tasks",
+          "columns": ["creator_id"],
+          "foreignTableName": "profiles",
+          "foreignColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tasks_sprint_id_sprints_id_fk": {
+          "name": "tasks_sprint_id_sprints_id_fk",
+          "tableName": "tasks",
+          "columns": ["sprint_id"],
+          "foreignTableName": "sprints",
+          "foreignColumns": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      }
+    }
+  }
+}
+

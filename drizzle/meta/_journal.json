@@ -22,6 +22,20 @@
       "when": 1755100000000,
       "tag": "0009_ai_memory",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1755781095419,
+      "tag": "0003_strong_kingpin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1755785472000,
+      "tag": "0010_add_project_key_and_task_id",
+      "breakpoints": true
     }
   ]
 }

@@ -1,12 +1,15 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isPublicRoute = createRouteMatcher([
-  '/', 
+  '/',
   '/auth/sign-in(.*)',
   '/auth/sign-up(.*)',
   '/api/webhooks/clerk',
   '/api/invitations/validate(.*)',
-  '/join(.*)'
+  '/join(.*)',
+  '/api/github/callback(.*)',
+  '/api/github/repositories(.*)',
+  '/api/github/status(.*)'
 ]);
 
 // Add the onboarding route to the list of public routes for now

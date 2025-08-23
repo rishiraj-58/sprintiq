@@ -58,6 +58,7 @@ export const invitations = pgTable('invitations', {
 export const projects = pgTable('projects', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
+  key: varchar('key', { length: 10 }).notNull().unique(), // Project key for human-readable IDs (e.g., "RB", "SPRINTIQ")
   description: text('description'),
   status: varchar('status', { length: 20 }).notNull().default('active'),
   workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
@@ -98,6 +99,7 @@ export type TaskStatus = typeof taskStatuses.$inferSelect;
 // Tasks
 export const tasks = pgTable('tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
+  projectTaskId: integer('project_task_id').notNull(), // Sequential ID within project (e.g., 123 in "RB-123")
   title: varchar('title', { length: 200 }).notNull(),
   description: text('description'),
   type: varchar('type', { length: 30 }).notNull().default('feature'),
@@ -226,6 +228,7 @@ export const comments = pgTable('comments', {
 // Bugs
 export const bugs = pgTable('bugs', {
   id: uuid('id').defaultRandom().primaryKey(),
+  projectBugId: integer('project_bug_id').notNull(), // Sequential ID within project (e.g., 456 in "RB-456")
   title: varchar('title', { length: 200 }).notNull(),
   description: text('description'),
   status: varchar('status', { length: 20 }).notNull().default('open'),
@@ -391,3 +394,90 @@ export const aiMemory = pgTable('ai_memory', {
   value: jsonb('value').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// GitHub Integration Tables
+
+// Workspace GitHub Integrations (one per workspace)
+export const githubIntegrations = pgTable('github_integrations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  githubInstallationId: varchar('github_installation_id', { length: 50 }).notNull(),
+  githubOrgName: varchar('github_org_name', { length: 100 }).notNull(),
+  accessToken: text('access_token').notNull(), // Encrypted
+  refreshToken: text('refresh_token'), // Encrypted
+  expiresAt: timestamp('expires_at'),
+  connectedById: varchar('connected_by_id', { length: 255 }).notNull().references(() => profiles.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Project Repository Links (many-to-many: projects to GitHub repos)
+export const projectRepositories = pgTable('project_repositories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  githubIntegrationId: uuid('github_integration_id').notNull().references(() => githubIntegrations.id, { onDelete: 'cascade' }),
+  repositoryName: varchar('repository_name', { length: 200 }).notNull(), // e.g., "sprintiq-frontend"
+  repositoryFullName: varchar('repository_full_name', { length: 300 }).notNull(), // e.g., "acme-corp/sprintiq-frontend"
+  githubRepoId: varchar('github_repo_id', { length: 50 }).notNull(), // GitHub's internal repo ID
+  defaultBranch: varchar('default_branch', { length: 100 }).notNull().default('main'),
+  isActive: boolean('is_active').notNull().default(true),
+  linkedById: varchar('linked_by_id', { length: 255 }).notNull().references(() => profiles.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// GitHub Branches (created from SprintIQ tasks)
+export const githubBranches = pgTable('github_branches', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  projectRepositoryId: uuid('project_repository_id').notNull().references(() => projectRepositories.id, { onDelete: 'cascade' }),
+  branchName: varchar('branch_name', { length: 300 }).notNull(),
+  githubBranchRef: text('github_branch_ref').notNull(), // Full ref from GitHub API
+  createdById: varchar('created_by_id', { length: 255 }).notNull().references(() => profiles.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// GitHub Pull Requests
+export const githubPullRequests = pgTable('github_pull_requests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }), // Can be null if PR exists without task link
+  projectRepositoryId: uuid('project_repository_id').notNull().references(() => projectRepositories.id, { onDelete: 'cascade' }),
+  githubPrNumber: integer('github_pr_number').notNull(),
+  title: varchar('title', { length: 300 }).notNull(),
+  body: text('body'),
+  state: varchar('state', { length: 20 }).notNull().default('open'), // open, closed, merged
+  isDraft: boolean('is_draft').notNull().default(false),
+  headBranch: varchar('head_branch', { length: 300 }).notNull(),
+  baseBranch: varchar('base_branch', { length: 300 }).notNull(),
+  authorLogin: varchar('author_login', { length: 100 }).notNull(),
+  githubCreatedAt: timestamp('github_created_at').notNull(),
+  githubUpdatedAt: timestamp('github_updated_at').notNull(),
+  githubMergedAt: timestamp('github_merged_at'),
+  checksStatus: varchar('checks_status', { length: 20 }).default('pending'), // pending, success, failure
+  reviewStatus: varchar('review_status', { length: 20 }).default('pending'), // pending, approved, changes_requested
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// GitHub Activity Feed (webhook events)
+export const githubActivities = pgTable('github_activities', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  projectRepositoryId: uuid('project_repository_id').notNull().references(() => projectRepositories.id, { onDelete: 'cascade' }),
+  activityType: varchar('activity_type', { length: 50 }).notNull(), // push, pull_request, pull_request_review, etc.
+  actorLogin: varchar('actor_login', { length: 100 }).notNull(),
+  actorAvatarUrl: text('actor_avatar_url'),
+  title: varchar('title', { length: 300 }).notNull(),
+  description: text('description'),
+  githubUrl: text('github_url'), // Link to the activity on GitHub
+  metadata: jsonb('metadata'), // Additional data specific to activity type
+  githubCreatedAt: timestamp('github_created_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Export types for GitHub integration
+export type GithubIntegration = typeof githubIntegrations.$inferSelect;
+export type ProjectRepository = typeof projectRepositories.$inferSelect;
+export type GithubBranch = typeof githubBranches.$inferSelect;
+export type GithubPullRequest = typeof githubPullRequests.$inferSelect;
+export type GithubActivity = typeof githubActivities.$inferSelect;

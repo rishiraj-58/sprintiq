@@ -46,10 +46,21 @@ export async function POST(request: Request) {
       return new NextResponse('Forbidden: You do not have permission to create tasks', { status: 403 });
     }
 
+    // Get the next project_task_id for this project
+    const [lastTask] = await db
+      .select({ projectTaskId: tasks.projectTaskId })
+      .from(tasks)
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(tasks.projectTaskId)
+      .limit(1);
+    
+    const nextProjectTaskId = lastTask ? lastTask.projectTaskId + 1 : 1;
+
     // Create the task
     const [newTask] = await db
       .insert(tasks)
       .values({
+        projectTaskId: nextProjectTaskId,
         title,
         description,
         type: type || 'feature',

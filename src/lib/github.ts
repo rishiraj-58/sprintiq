@@ -160,6 +160,29 @@ export class GitHubService {
     }
   }
 
+  // Get branches for a specific repository
+  async getRepositoryBranches(repositoryFullName: string) {
+    try {
+      const [owner, repo] = repositoryFullName.split('/');
+
+      const { data } = await this.octokit.rest.repos.listBranches({
+        owner,
+        repo,
+        per_page: 100,
+      });
+
+      return data.map((branch: any) => ({
+        name: branch.name,
+        sha: branch.commit.sha,
+        protected: branch.protected,
+        htmlUrl: `https://github.com/${repositoryFullName}/tree/${branch.name}`,
+      }));
+    } catch (error) {
+      console.error(`Error fetching branches for ${repositoryFullName}:`, error);
+      throw new Error('Failed to fetch repository branches');
+    }
+  }
+
   // Create a branch
   async createBranch(repo: string, branchName: string, fromBranch: string = 'main') {
     try {

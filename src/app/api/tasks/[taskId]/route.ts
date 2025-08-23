@@ -25,6 +25,7 @@ export async function GET(
     const [taskWithDetails] = await db
       .select({
         id: tasks.id,
+        projectTaskId: tasks.projectTaskId,
         title: tasks.title,
         description: tasks.description,
         status: tasks.status,
@@ -35,6 +36,12 @@ export async function GET(
         updatedAt: tasks.updatedAt,
         dueDate: tasks.dueDate,
         workspaceId: projects.workspaceId,
+        project: {
+          id: projects.id,
+          key: projects.key,
+          name: projects.name,
+          description: projects.description,
+        },
         assignee: {
           id: assigneeProfiles.id,
           firstName: assigneeProfiles.firstName,
@@ -109,6 +116,7 @@ export async function PATCH(
     const [task] = await db
       .select({
         id: tasks.id,
+        projectTaskId: tasks.projectTaskId,
         projectId: tasks.projectId,
         workspaceId: projects.workspaceId,
         type: tasks.type,
@@ -120,6 +128,12 @@ export async function PATCH(
         sprintId: tasks.sprintId,
         dueDate: tasks.dueDate,
         storyPoints: tasks.storyPoints,
+        project: {
+          id: projects.id,
+          key: projects.key,
+          name: projects.name,
+          description: projects.description,
+        },
       })
       .from(tasks)
       .innerJoin(projects, eq(tasks.projectId, projects.id))

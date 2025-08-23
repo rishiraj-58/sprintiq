@@ -29,6 +29,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
     const [taskWithDetails] = await db
       .select({
         id: tasks.id,
+        projectTaskId: tasks.projectTaskId,
         title: tasks.title,
         description: tasks.description,
         status: tasks.status,
@@ -40,6 +41,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         workspaceId: projects.workspaceId,
         project: {
           id: projects.id,
+          key: projects.key,
           name: projects.name,
           description: projects.description,
         },

@@ -137,6 +137,8 @@ async function processPushEvent(payload: any) {
 async function processPullRequestEvent(payload: any) {
   const { action, pull_request, repository, sender } = payload;
 
+  console.log(`Processing PR webhook: ${action} - PR #${pull_request.number} - Branch: ${pull_request.head.ref} - Repo: ${repository.full_name}`);
+
   // Find linked project repositories for this repository
   const linkedRepos = await db
     .select({
@@ -146,16 +148,30 @@ async function processPullRequestEvent(payload: any) {
     .from(projectRepositories)
     .where(eq(projectRepositories.githubRepoId, repository.id.toString()));
 
-  if (linkedRepos.length === 0) return;
+  console.log(`Found ${linkedRepos.length} linked repositories for GitHub repo ${repository.id}`);
+
+  if (linkedRepos.length === 0) {
+    console.log('No linked repositories found, skipping PR processing');
+    return;
+  }
 
   // Check if this PR is linked to a task by branch name
   const linkedBranch = await db
     .select({
       id: githubBranches.id,
       taskId: githubBranches.taskId,
+      branchName: githubBranches.branchName,
     })
     .from(githubBranches)
     .where(eq(githubBranches.branchName, pull_request.head.ref));
+
+  console.log(`Looking for branch "${pull_request.head.ref}" in linked branches. Found ${linkedBranch.length} matches`);
+
+  if (linkedBranch.length > 0) {
+    console.log(`Branch "${pull_request.head.ref}" is linked to task ${linkedBranch[0].taskId}`);
+  } else {
+    console.log(`Branch "${pull_request.head.ref}" is not linked to any task`);
+  }
 
   // Find the specific project repository for this PR
   const projectRepo = await db
@@ -167,6 +183,8 @@ async function processPullRequestEvent(payload: any) {
     .limit(1);
 
   if (projectRepo.length > 0) {
+    console.log(`Found project repository ${projectRepo[0].id} for PR`);
+
     // Update or create PR record
     const prData = {
       taskId: linkedBranch[0]?.taskId || null,
@@ -186,16 +204,51 @@ async function processPullRequestEvent(payload: any) {
       reviewStatus: 'pending',
     };
 
-    if (action === 'opened' || action === 'synchronize') {
-      // Insert or update PR
-      await db
-        .insert(githubPullRequests)
-        .values(prData)
-        .onConflictDoUpdate({
-          target: githubPullRequests.githubPrNumber,
-          set: prData,
-        });
+    console.log(`PR data to save:`, {
+      taskId: prData.taskId,
+      projectRepositoryId: prData.projectRepositoryId,
+      githubPrNumber: prData.githubPrNumber,
+      title: prData.title,
+      headBranch: prData.headBranch,
+      state: prData.state
+    });
+
+    if (action === 'opened' || action === 'synchronize' || action === 'reopened') {
+      console.log(`Saving PR #${pull_request.number} with action: ${action}`);
+      try {
+        // Check if PR already exists for this repository
+        const existingPR = await db
+          .select()
+          .from(githubPullRequests)
+          .where(
+            and(
+              eq(githubPullRequests.projectRepositoryId, prData.projectRepositoryId),
+              eq(githubPullRequests.githubPrNumber, prData.githubPrNumber)
+            )
+          )
+          .limit(1);
+
+        if (existingPR.length > 0) {
+          // Update existing PR
+          await db
+            .update(githubPullRequests)
+            .set(prData)
+            .where(eq(githubPullRequests.id, existingPR[0].id));
+          console.log(`Updated existing PR #${pull_request.number}`);
+        } else {
+          // Insert new PR
+          await db.insert(githubPullRequests).values(prData);
+          console.log(`Created new PR #${pull_request.number}`);
+        }
+        console.log(`Successfully saved PR #${pull_request.number}`);
+      } catch (error) {
+        console.error(`Error saving PR #${pull_request.number}:`, error);
+      }
+    } else {
+      console.log(`Skipping PR save for action: ${action}`);
     }
+  } else {
+    console.log('No project repository found for this PR');
   }
 
   // Record the PR activity

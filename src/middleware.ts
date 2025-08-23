@@ -9,7 +9,11 @@ const isPublicRoute = createRouteMatcher([
   '/join(.*)',
   '/api/github/callback(.*)',
   '/api/github/repositories(.*)',
-  '/api/github/status(.*)'
+  '/api/github/status(.*)',
+  '/api/github/branches(.*)',
+  '/api/github/branches/check(.*)',
+  '/api/github/link-branch(.*)',
+  '/api/github/webhooks(.*)'
 ]);
 
 // Add the onboarding route to the list of public routes for now

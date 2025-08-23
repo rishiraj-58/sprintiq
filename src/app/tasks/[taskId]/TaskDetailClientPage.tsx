@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Calendar, Clock, User, ArrowLeft, Edit, Save, X, Plus, GitBranch, ExternalLink, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Calendar, Clock, User, ArrowLeft, Edit, Save, X, Plus, GitBranch, ExternalLink, CheckCircle2, AlertCircle, Loader2, Search } from 'lucide-react';
 import { useTask } from '@/stores/hooks/useTask';
 import { useWorkspace } from '@/stores/hooks/useWorkspace';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -25,6 +25,14 @@ import { LinkedTasks } from '@/components/tasks/LinkedTasks';
 import { History } from '@/components/tasks/History';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import dynamic from 'next/dynamic';
 
 interface TaskDetailData {
@@ -127,9 +135,123 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
   const [githubActivities, setGithubActivities] = useState<GitHubActivity[]>([]);
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [githubLoading, setGithubLoading] = useState(true);
+  const [existingBranches, setExistingBranches] = useState<any[]>([]);
+  const [showBranchLinkDialog, setShowBranchLinkDialog] = useState(false);
+  const [branchSearchQuery, setBranchSearchQuery] = useState('');
+  const [searchedBranches, setSearchedBranches] = useState<any[]>([]);
+  const [isSearchingBranches, setIsSearchingBranches] = useState(false);
 
   // Generate human-readable task ID
   const humanTaskId = `${task.project.key}-${task.projectTaskId}`;
+
+  // Search for branches in linked repositories
+  const searchBranches = async (query: string = '') => {
+    if (!linkedRepositories.length) return;
+
+    setIsSearchingBranches(true);
+    try {
+      const searchParams = new URLSearchParams({
+        projectId: task.projectId,
+        q: query
+      });
+
+      const response = await fetch(`/api/github/branches?${searchParams}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Branch search results:', data.branches);
+        setSearchedBranches(data.branches || []);
+      } else {
+        console.error('Failed to search branches:', await response.text());
+        setSearchedBranches([]);
+      }
+    } catch (error) {
+      console.error('Error searching branches:', error);
+      setSearchedBranches([]);
+    } finally {
+      setIsSearchingBranches(false);
+    }
+  };
+
+  // Handle branch search input change
+  const handleBranchSearch = (query: string) => {
+    setBranchSearchQuery(query);
+    // Debounce the search
+    setTimeout(() => {
+      searchBranches(query);
+    }, 300);
+  };
+
+  // Link existing branch to task
+  const linkBranchToTask = async (branch: any) => {
+    try {
+      // Create a githubBranches record linking this branch to the task
+      const response = await fetch('/api/github/link-branch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          projectRepositoryId: branch.projectRepositoryId,
+          branchName: branch.name,
+          githubBranchRef: `refs/heads/${branch.name}`,
+        }),
+      });
+
+      if (response.ok || response.status === 409) {
+        // Refresh activities to show the linked branch
+        const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+        if (activitiesRes.ok) {
+          const activitiesData = await activitiesRes.json();
+          setGithubActivities(activitiesData.activities || []);
+        }
+
+        setShowBranchLinkDialog(false);
+        setBranchSearchQuery('');
+        setSearchedBranches([]);
+
+        // Show success message
+        if (response.status === 409) {
+          console.log(`Branch ${branch.name} is already linked to task ${humanTaskId}`);
+        } else {
+          console.log(`Successfully linked branch ${branch.name} to task ${humanTaskId}`);
+        }
+
+        // Refresh the GitHub data to show the linked branch
+        console.log('Refreshing GitHub data after branch linking...');
+
+        // Also refresh pull requests and activities to show the linked branch
+        try {
+          const prRes = await fetch(`/api/tasks/${task.id}/github/pull-requests`);
+          if (prRes.ok) {
+            const prData = await prRes.json();
+            setPullRequests(prData.pullRequests || []);
+          }
+
+          const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+          if (activitiesRes.ok) {
+            const activitiesData = await activitiesRes.json();
+            setGithubActivities(activitiesData.activities || []);
+            console.log('Updated activities after branch linking:', activitiesData.activities?.length || 0);
+          }
+        } catch (error) {
+          console.error('Error refreshing PRs and activities:', error);
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to link branch:', errorText);
+
+        // Show user-friendly error message
+        if (errorText.includes('already linked')) {
+          console.log(`Branch ${branch.name} is already linked to this task`);
+        } else {
+          console.error(`Error linking branch: ${errorText}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error linking branch:', error);
+    }
+  };
 
   // Fetch workspace members when component mounts
   useEffect(() => {
@@ -146,9 +268,123 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
 
         // Load linked repositories for this project
         const reposRes = await fetch(`/api/projects/${task.projectId}/repositories`);
+        let loadedRepositories: LinkedRepository[] = [];
         if (reposRes.ok) {
           const reposData = await reposRes.json();
-          setLinkedRepositories(reposData.repositories || []);
+          loadedRepositories = reposData.repositories || [];
+          setLinkedRepositories(loadedRepositories);
+        }
+
+        // Check for existing branches for this task
+        if (loadedRepositories.length > 0) {
+          try {
+            // First check if there are any linked branches in the githubBranches table
+            const linkedBranches: any[] = [];
+
+            for (const repo of loadedRepositories) {
+              try {
+                console.log(`Checking branches for task ${task.id} in repo ${repo.repositoryName} (${repo.id})`);
+                // Query githubBranches table directly to see if any branches are linked to this task
+                const branchCheckRes = await fetch(`/api/github/branches/check?taskId=${task.id}&repositoryId=${repo.id}`);
+                console.log(`Branch check response status: ${branchCheckRes.status}`);
+                if (branchCheckRes.ok) {
+                  const branchData = await branchCheckRes.json();
+                  console.log(`Branch check response data:`, branchData);
+                  if (branchData.branches && branchData.branches.length > 0) {
+                    console.log(`Found ${branchData.branches.length} linked branches for repo ${repo.repositoryName}`);
+                    linkedBranches.push(...branchData.branches.map((branch: any) => ({
+                      ...branch,
+                      repositoryName: repo.repositoryName,
+                      activityType: 'branch_linked',
+                      title: `Branch linked: ${branch.branchName}`,
+                      description: `Branch ${branch.branchName} is linked to task ${humanTaskId}`,
+                      taskId: task.id,
+                      repositoryFullName: repo.repositoryFullName,
+                      githubUrl: `https://github.com/${repo.repositoryFullName}/tree/${branch.branchName}`,
+                      githubUrl_debug: {
+                        repoFullName: repo.repositoryFullName,
+                        branchName: branch.branchName,
+                        constructedUrl: `https://github.com/${repo.repositoryFullName}/tree/${branch.branchName}`
+                      }
+                    })));
+                  } else {
+                    console.log(`No linked branches found for repo ${repo.repositoryName}`);
+                  }
+                } else {
+                  const errorText = await branchCheckRes.text();
+                  console.error(`Branch check failed for repo ${repo.repositoryName}: ${branchCheckRes.status} - ${errorText}`);
+                }
+              } catch (branchError) {
+                console.error(`Error checking branches for repo ${repo.repositoryName}:`, branchError);
+              }
+            }
+
+            // Also check activities for any branch-related activities
+            const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+            if (activitiesRes.ok) {
+              const activitiesData = await activitiesRes.json();
+              console.log('GitHub activities response:', activitiesData);
+              console.log('Total activities found:', activitiesData.activities?.length || 0);
+
+              if (activitiesData.activities && activitiesData.activities.length > 0) {
+                console.log('Sample activity:', activitiesData.activities[0]);
+              }
+
+              // Look for any activities that might indicate branch creation or linking
+              // This could be 'branch_created', 'branch_linked', 'create', 'push', or other activity types
+              const branchActivities = activitiesData.activities?.filter((activity: any) => {
+                const activityType = activity.activityType?.toLowerCase() || '';
+                const title = activity.title?.toLowerCase() || '';
+                const description = activity.description?.toLowerCase() || '';
+
+                console.log(`Checking activity: ${activityType} - ${title} - TaskId: ${activity.taskId}`);
+
+                // Check if this activity is related to branch creation or linking
+                const isBranchRelated = activityType.includes('branch') ||
+                                      activityType.includes('create') ||
+                                      title.includes('branch') ||
+                                      title.includes('created') ||
+                                      title.includes('linked');
+
+                const containsTaskId = title.includes(humanTaskId.toLowerCase()) ||
+                                     description.includes(humanTaskId.toLowerCase()) ||
+                                     activity.taskId === task.id;
+
+                console.log(`  - Branch related: ${isBranchRelated}, Contains task ID: ${containsTaskId}`);
+                console.log(`  - Activity taskId: ${activity.taskId}, Current taskId: ${task.id}`);
+                console.log(`  - Human task ID: ${humanTaskId}, Title: ${title}, Description: ${description}`);
+
+                return isBranchRelated && containsTaskId;
+              }) || [];
+
+              console.log('Branch activities found:', branchActivities);
+
+              // Combine linked branches from database with activities
+              const allBranches = [...linkedBranches, ...branchActivities];
+              console.log('All branches found (from DB + activities):', allBranches);
+              console.log('Linked branches from DB:', linkedBranches.length);
+              console.log('Branch activities from API:', branchActivities.length);
+              console.log('Setting existingBranches to:', allBranches.length, 'branches');
+
+              if (allBranches.length > 0) {
+                console.log('First branch details:', {
+                  title: allBranches[0].title,
+                  githubUrl: allBranches[0].githubUrl,
+                  repositoryFullName: allBranches[0].repositoryFullName,
+                  debug: allBranches[0].githubUrl_debug
+                });
+              }
+
+              setExistingBranches(allBranches);
+            } else {
+              console.error('Failed to fetch activities:', activitiesRes.status, await activitiesRes.text());
+              // Still set the linked branches we found
+              setExistingBranches(linkedBranches);
+            }
+          } catch (error) {
+            console.error('Error checking branches:', error);
+            setExistingBranches([]);
+          }
         }
 
         // Load pull requests for this task
@@ -158,12 +394,12 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           setPullRequests(prsData.pullRequests || []);
         }
 
-        // Load GitHub activities for this task
-        const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
-        if (activitiesRes.ok) {
-          const activitiesData = await activitiesRes.json();
-          setGithubActivities(activitiesData.activities || []);
-        }
+        // Load GitHub activities for this task (already loaded above)
+        // const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+        // if (activitiesRes.ok) {
+        //   const activitiesData = await activitiesRes.json();
+        //   setGithubActivities(activitiesData.activities || []);
+        // }
       } catch (error) {
         console.error('Error loading GitHub data:', error);
       } finally {
@@ -320,7 +556,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
       case 'failure':
         return <AlertCircle className="h-4 w-4 text-red-600" />;
       default:
-        return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />;
+        return <Clock className="h-4 w-4 text-yellow-600" />;
     }
   };
 
@@ -455,50 +691,105 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Create Branch */}
+                {/* Branch Management */}
                 <div className="space-y-3">
-                  <div className="text-sm">
-                    <p className="font-medium mb-1">Create Branch</p>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Suggested: {getBranchName(title)}
-                    </p>
-                  </div>
-                  
-                  {linkedRepositories.length === 1 ? (
-                    <Button
-                      onClick={() => createBranch(linkedRepositories[0].id, linkedRepositories[0].repositoryName)}
-                      disabled={isCreatingBranch}
-                      size="sm"
-                      className="w-full"
-                    >
-                      {isCreatingBranch ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <GitBranch className="h-3 w-3 mr-2" />
-                          Create Branch
-                        </>
-                      )}
-                    </Button>
+                  {existingBranches.length > 0 ? (
+                    // Branch already exists
+                    <div className="space-y-3">
+                      <div className="text-sm">
+                        <p className="font-medium mb-1">Branch Created</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <GitBranch className="h-3 w-3" />
+                          <span>{existingBranches[0].title}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            if (existingBranches[0].githubUrl) {
+                              console.log('Opening GitHub URL:', existingBranches[0].githubUrl);
+                              window.open(existingBranches[0].githubUrl, '_blank');
+                            } else {
+                              console.error('No GitHub URL available for branch');
+                            }
+                          }}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View Branch
+                        </Button>
+                      </div>
+                    </div>
                   ) : (
-                    <Select onValueChange={(repoId) => {
-                      const repo = linkedRepositories.find(r => r.id === repoId);
-                      if (repo) createBranch(repo.id, repo.repositoryName);
-                    }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose repository" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {linkedRepositories.map((repo) => (
-                          <SelectItem key={repo.id} value={repo.id}>
-                            {repo.repositoryName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    // No branch exists - show create options
+                    <div className="space-y-3">
+                      <div className="text-sm">
+                        <p className="font-medium mb-1">Create Branch</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Suggested: {getBranchName(title)}
+                        </p>
+                      </div>
+
+                      {linkedRepositories.length === 1 ? (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => createBranch(linkedRepositories[0].id, linkedRepositories[0].repositoryName)}
+                            disabled={isCreatingBranch}
+                            size="sm"
+                            className="flex-1"
+                          >
+                            {isCreatingBranch ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <GitBranch className="h-3 w-3 mr-2" />
+                                Create Branch
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowBranchLinkDialog(true)}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Link Existing
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Select onValueChange={(repoId) => {
+                            const repo = linkedRepositories.find(r => r.id === repoId);
+                            if (repo) createBranch(repo.id, repo.repositoryName);
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choose repository" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {linkedRepositories.map((repo) => (
+                                <SelectItem key={repo.id} value={repo.id}>
+                                  {repo.repositoryName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowBranchLinkDialog(true)}
+                            className="w-full"
+                          >
+                            <Plus className="h-3 w-3 mr-2" />
+                            Link Existing Branch
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -529,12 +820,10 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                           
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-1">
-                              {getStatusIcon(pr.checksStatus)}
-                              <span className="text-xs capitalize">{pr.checksStatus}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
                               {getReviewStatusIcon(pr.reviewStatus)}
-                              <span className="text-xs capitalize">{pr.reviewStatus.replace('_', ' ')}</span>
+                              <span className="text-xs capitalize">
+                                {pr.reviewStatus === 'pending' ? 'Review Pending' : pr.reviewStatus.replace('_', ' ')}
+                              </span>
                             </div>
                           </div>
                           
@@ -699,6 +988,111 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Link Existing Branch Dialog */}
+      <Dialog open={showBranchLinkDialog} onOpenChange={setShowBranchLinkDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              Link Existing Branch
+            </DialogTitle>
+            <DialogDescription>
+              Link an existing branch to this task. The branch name should contain the task ID ({humanTaskId.toLowerCase()}).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Search Input */}
+            <div className="space-y-2">
+              <Label htmlFor="branch-search">Search Branches</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="branch-search"
+                  placeholder={`Search branches... (try "${humanTaskId.toLowerCase()}")`}
+                  value={branchSearchQuery}
+                  onChange={(e) => handleBranchSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Search Results */}
+            <div className="space-y-2">
+              <Label>Available Branches</Label>
+              <div className="max-h-64 overflow-y-auto border rounded-lg">
+                {linkedRepositories.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <GitBranch className="h-8 w-8 mx-auto mb-2" />
+                    <p className="text-sm">No repositories linked</p>
+                    <p className="text-xs">Link a repository in project settings to see available branches</p>
+                  </div>
+                ) : isSearchingBranches ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                    <p className="text-sm">Searching branches...</p>
+                  </div>
+                ) : searchedBranches.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <GitBranch className="h-8 w-8 mx-auto mb-2" />
+                    <p className="text-sm">No branches found</p>
+                    <p className="text-xs">
+                      {branchSearchQuery
+                        ? `No branches match "${branchSearchQuery}"`
+                        : `Try searching for branches containing "${humanTaskId.toLowerCase()}"`
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {searchedBranches.map((branch, index) => (
+                      <div key={index} className="p-3 hover:bg-muted/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <GitBranch className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium text-sm">{branch.name}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {branch.repositoryFullName} • {branch.protected ? 'Protected' : 'Unprotected'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => linkBranchToTask(branch)}
+                            className="ml-2"
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Link
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Helper Text */}
+            {linkedRepositories.length > 0 && !isSearchingBranches && searchedBranches.length === 0 && (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  💡 <strong>Tip:</strong> Try searching for branches that contain your task ID (
+                  <code className="bg-muted px-2 py-1 rounded text-xs">{humanTaskId.toLowerCase()}</code>
+                  ) to find relevant branches.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBranchLinkDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

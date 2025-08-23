@@ -5,19 +5,22 @@ import { profiles } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 export async function getCurrentUserProfile() {
-  try {
-    const { userId } = auth();
-    const user = await currentUser();
+  const maxRetries = 2;
 
-    if (!userId || !user) {
-      return null;
-    }
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const { userId } = auth();
+      const user = await currentUser();
 
-    // Try to find existing profile
-    let [profile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, userId));
+      if (!userId || !user) {
+        return null;
+      }
+
+      // Try to find existing profile
+      let [profile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.id, userId));
 
     // If no profile exists, create one
     if (!profile) {
@@ -67,21 +70,44 @@ export async function getCurrentUserProfile() {
           .returning();
         }
       }
+      }
+
+      return profile;
+    } catch (error) {
+      console.error(`Error in getCurrentUserProfile (attempt ${attempt + 1}/${maxRetries + 1}):`, error);
+
+      // If it's a connection timeout and we haven't exhausted retries, wait and try again
+      if (error.message && error.message.includes('CONNECT_TIMEOUT') && attempt < maxRetries) {
+        console.log(`Retrying database operation in ${1000 * (attempt + 1)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        continue;
+      }
+
+      // If we've exhausted retries or it's not a connection error, return null
+      return null;
+    }
+  }
+
+  return null;
+}
+
+export async function requireAuth() {
+  try {
+    const profile = await getCurrentUserProfile();
+
+    if (!profile) {
+      throw new Error('Not authenticated or profile not found');
     }
 
     return profile;
   } catch (error) {
-    console.error('Error in getCurrentUserProfile:', error);
-    return null;
-  }
-}
+    console.error('Authentication error:', error);
 
-export async function requireAuth() {
-  const profile = await getCurrentUserProfile();
-  
-  if (!profile) {
-    throw new Error('Not authenticated or profile not found');
+    // If it's a database connection error, provide a more helpful message
+    if (error.message && error.message.includes('CONNECT_TIMEOUT')) {
+      throw new Error('Database connection temporarily unavailable. Please try again in a moment.');
+    }
+
+    throw error;
   }
-  
-  return profile;
 } 

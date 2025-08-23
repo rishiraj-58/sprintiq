@@ -23,6 +23,7 @@ import { TaskAttachmentUploader } from '@/components/tasks/TaskAttachmentUploade
 import { SubTasks } from '@/components/tasks/SubTasks';
 import { LinkedTasks } from '@/components/tasks/LinkedTasks';
 import { History } from '@/components/tasks/History';
+import { UnifiedActivityFeed } from '@/components/tasks/UnifiedActivityFeed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -55,20 +56,25 @@ interface TaskDetailData {
     name: string;
     description: string | null;
   };
-  assignee: {
+  assignee?: {
     id: string;
-    firstName: string | null;
-    lastName: string | null;
-    email: string | null;
+    firstName: string;
+    lastName: string;
+    email: string;
     avatarUrl: string | null;
   } | null;
-  creator: {
+  creator?: {
     id: string;
-    firstName: string | null;
-    lastName: string | null;
-    email: string | null;
+    firstName: string;
+    lastName: string;
+    email: string;
     avatarUrl: string | null;
   } | null;
+}
+
+interface TaskDetailClientPageProps {
+  task: TaskDetailData;
+  authError?: Error | null;
 }
 
 interface GitHubPullRequest {
@@ -108,7 +114,7 @@ interface TaskDetailClientPageProps {
   task: TaskDetailData;
 }
 
-export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
+export function TaskDetailClientPage({ task, authError }: TaskDetailClientPageProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { updateTask } = useTask();
@@ -394,12 +400,12 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           setPullRequests(prsData.pullRequests || []);
         }
 
-        // Load GitHub activities for this task (already loaded above)
-        // const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
-        // if (activitiesRes.ok) {
-        //   const activitiesData = await activitiesRes.json();
-        //   setGithubActivities(activitiesData.activities || []);
-        // }
+        // Load GitHub activities for this task (for unified feed)
+        const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+        if (activitiesRes.ok) {
+          const activitiesData = await activitiesRes.json();
+          setGithubActivities(activitiesData.activities || []);
+        }
       } catch (error) {
         console.error('Error loading GitHub data:', error);
       } finally {
@@ -573,6 +579,29 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Authentication Error Banner */}
+      {authError && (
+        <div className="mb-6 p-4 border border-amber-200 bg-amber-50 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="text-amber-600">⚠️</div>
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-amber-800">Connection Issue</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                We're having trouble connecting to the database. Some features may be limited. Please try refreshing the page.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.location.reload()}
+              className="border-amber-300 text-amber-700 hover:bg-amber-100"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -625,53 +654,7 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
           </Card>
 
           {/* Unified Activity Feed */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {githubLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">Loading activity...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {githubActivities.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No development activity yet. Create a branch to get started!
-                      </p>
-                    ) : (
-                      githubActivities.map((activity) => (
-                        <div key={activity.id} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                          <GitBranch className="h-4 w-4 text-muted-foreground mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{activity.title}</p>
-                            {activity.description && (
-                              <p className="text-xs text-muted-foreground mt-1">{activity.description}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                              <span>{activity.actorLogin}</span>
-                              <span>•</span>
-                              <span>{new Date(activity.githubCreatedAt).toLocaleDateString()}</span>
-                              <span>•</span>
-                              <span>{activity.repositoryFullName}</span>
-                            </div>
-                          </div>
-                          {activity.githubUrl && (
-                            <Button variant="ghost" size="sm" onClick={() => window.open(activity.githubUrl!, '_blank')}>
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <UnifiedActivityFeed taskId={task.id} workspaceId={task.workspaceId} />
 
           {/* Subtasks */}
           <SubTasks taskId={task.id} workspaceId={task.workspaceId} />
@@ -820,11 +803,53 @@ export function TaskDetailClientPage({ task }: TaskDetailClientPageProps) {
                           
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-1">
-                              {getReviewStatusIcon(pr.reviewStatus)}
+                              {pr.state === 'closed' ? <AlertCircle className="h-4 w-4 text-red-600" /> :
+                               pr.state === 'merged' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> :
+                               getReviewStatusIcon(pr.reviewStatus)}
                               <span className="text-xs capitalize">
-                                {pr.reviewStatus === 'pending' ? 'Review Pending' : pr.reviewStatus.replace('_', ' ')}
+                                {pr.state === 'closed' ? 'PR Closed' :
+                                 pr.state === 'merged' ? 'PR Merged' :
+                                 pr.reviewStatus === 'pending' ? 'Review Pending' :
+                                 pr.reviewStatus.replace('_', ' ')}
                               </span>
                             </div>
+                          </div>
+
+                          {/* Enhanced Status Badges */}
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {/* CI/CD Status Badge */}
+                            {pr.checksStatus === 'success' && (
+                              <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
+                                ✅ Checks Passed
+                              </Badge>
+                            )}
+                            {pr.checksStatus === 'failure' && (
+                              <Badge variant="destructive" className="text-xs">
+                                ❌ Checks Failed
+                              </Badge>
+                            )}
+                            {pr.checksStatus === 'pending' && (
+                              <Badge variant="secondary" className="text-xs">
+                                🔄 Checks Running
+                              </Badge>
+                            )}
+
+                            {/* Review Status Badge */}
+                            {pr.reviewStatus === 'approved' && (
+                              <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
+                                ✅ Review Approved
+                              </Badge>
+                            )}
+                            {pr.reviewStatus === 'changes_requested' && (
+                              <Badge variant="destructive" className="text-xs">
+                                🔍 Changes Requested
+                              </Badge>
+                            )}
+                            {pr.reviewStatus === 'pending' && (
+                              <Badge variant="outline" className="text-xs">
+                                🔍 Review Requested
+                              </Badge>
+                            )}
                           </div>
                           
                           <Badge 

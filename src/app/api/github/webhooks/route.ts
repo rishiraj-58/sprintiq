@@ -213,8 +213,8 @@ async function processPullRequestEvent(payload: any) {
       state: prData.state
     });
 
-    if (action === 'opened' || action === 'synchronize' || action === 'reopened') {
-      console.log(`Saving PR #${pull_request.number} with action: ${action}`);
+    if (action === 'opened' || action === 'synchronize' || action === 'reopened' || action === 'closed' || action === 'merged') {
+      console.log(`Processing PR #${pull_request.number} with action: ${action}`);
       try {
         // Check if PR already exists for this repository
         const existingPR = await db
@@ -234,15 +234,45 @@ async function processPullRequestEvent(payload: any) {
             .update(githubPullRequests)
             .set(prData)
             .where(eq(githubPullRequests.id, existingPR[0].id));
-          console.log(`Updated existing PR #${pull_request.number}`);
+          console.log(`Updated existing PR #${pull_request.number} with state: ${prData.state}`);
         } else {
           // Insert new PR
           await db.insert(githubPullRequests).values(prData);
-          console.log(`Created new PR #${pull_request.number}`);
+          console.log(`Created new PR #${pull_request.number} with state: ${prData.state}`);
         }
-        console.log(`Successfully saved PR #${pull_request.number}`);
+        console.log(`Successfully processed PR #${pull_request.number}`);
       } catch (error) {
         console.error(`Error saving PR #${pull_request.number}:`, error);
+      }
+    } else if (action === 'closed' || action === 'merged') {
+      // Handle PR closure/merge separately if not already processed above
+      console.log(`Processing PR #${pull_request.number} closure/merge with action: ${action}`);
+      try {
+        const existingPR = await db
+          .select()
+          .from(githubPullRequests)
+          .where(
+            and(
+              eq(githubPullRequests.projectRepositoryId, prData.projectRepositoryId),
+              eq(githubPullRequests.githubPrNumber, prData.githubPrNumber)
+            )
+          )
+          .limit(1);
+
+        if (existingPR.length > 0) {
+          // Update PR state for closure/merge
+          await db
+            .update(githubPullRequests)
+            .set({
+              state: prData.state,
+              githubUpdatedAt: prData.githubUpdatedAt,
+              githubMergedAt: prData.githubMergedAt,
+            })
+            .where(eq(githubPullRequests.id, existingPR[0].id));
+          console.log(`Updated PR #${pull_request.number} state to: ${prData.state}`);
+        }
+      } catch (error) {
+        console.error(`Error updating PR #${pull_request.number} state:`, error);
       }
     } else {
       console.log(`Skipping PR save for action: ${action}`);
@@ -422,7 +452,9 @@ async function processIssueCommentEvent(payload: any) {
 // Process pull request review events
 async function processPullRequestReviewEvent(payload: any) {
   const { action, pull_request, review, repository, sender } = payload;
-  
+
+  console.log(`Processing PR review: ${action} - PR #${pull_request.number} - Review state: ${review.state}`);
+
   // Find linked project repositories for this repository
   const linkedRepos = await db
     .select({
@@ -432,7 +464,52 @@ async function processPullRequestReviewEvent(payload: any) {
     .from(projectRepositories)
     .where(eq(projectRepositories.githubRepoId, repository.id.toString()));
 
-  if (linkedRepos.length === 0) return;
+  if (linkedRepos.length === 0) {
+    console.log('No linked repositories found for PR review');
+    return;
+  }
+
+  // Update PR review status if we find a matching PR
+  const projectRepo = await db
+    .select({ id: projectRepositories.id })
+    .from(projectRepositories)
+    .where(eq(projectRepositories.githubRepoId, repository.id.toString()))
+    .limit(1);
+
+  if (projectRepo.length > 0) {
+    const existingPR = await db
+      .select()
+      .from(githubPullRequests)
+      .where(
+        and(
+          eq(githubPullRequests.projectRepositoryId, projectRepo[0].id),
+          eq(githubPullRequests.githubPrNumber, pull_request.number)
+        )
+      )
+      .limit(1);
+
+    if (existingPR.length > 0) {
+      // Update PR review status based on the review state
+      let reviewStatus = 'pending';
+      if (review.state === 'APPROVED') {
+        reviewStatus = 'approved';
+      } else if (review.state === 'CHANGES_REQUESTED') {
+        reviewStatus = 'changes_requested';
+      } else if (review.state === 'COMMENTED') {
+        reviewStatus = 'pending'; // Keep as pending for comments
+      }
+
+      await db
+        .update(githubPullRequests)
+        .set({
+          reviewStatus: reviewStatus,
+          githubUpdatedAt: new Date(),
+        })
+        .where(eq(githubPullRequests.id, existingPR[0].id));
+
+      console.log(`Updated PR #${pull_request.number} review status to: ${reviewStatus}`);
+    }
+  }
 
   // Record review activity
   for (const repo of linkedRepos) {
@@ -440,8 +517,8 @@ async function processPullRequestReviewEvent(payload: any) {
       projectRepositoryId: repo.id,
       activityType: `review_${action}`,
       actorLogin: sender.login,
-      title: `PR Review ${action}`,
-      description: review.body?.substring(0, 200) || '',
+      title: `PR Review ${review.state.replace('_', ' ').toLowerCase()}`,
+      description: review.body?.substring(0, 200) || `Review ${review.state.toLowerCase()}`,
       metadata: {
         repository: repository.full_name,
         prNumber: pull_request.number,
@@ -458,7 +535,9 @@ async function processPullRequestReviewEvent(payload: any) {
 // Process check suite events (CI/CD status)
 async function processCheckSuiteEvent(payload: any) {
   const { action, check_suite, repository, sender } = payload;
-  
+
+  console.log(`Processing check suite: ${action} - Status: ${check_suite.status}, Conclusion: ${check_suite.conclusion} - Branch: ${check_suite.head_branch}`);
+
   // Find linked project repositories for this repository
   const linkedRepos = await db
     .select({
@@ -468,7 +547,55 @@ async function processCheckSuiteEvent(payload: any) {
     .from(projectRepositories)
     .where(eq(projectRepositories.githubRepoId, repository.id.toString()));
 
-  if (linkedRepos.length === 0) return;
+  if (linkedRepos.length === 0) {
+    console.log('No linked repositories found for check suite');
+    return;
+  }
+
+  // Update PR checks status if this check suite is for a branch with an open PR
+  if (check_suite.head_branch) {
+    const projectRepo = await db
+      .select({ id: projectRepositories.id })
+      .from(projectRepositories)
+      .where(eq(projectRepositories.githubRepoId, repository.id.toString()))
+      .limit(1);
+
+    if (projectRepo.length > 0) {
+      // Find PRs with this branch as head branch
+      const prsWithBranch = await db
+        .select()
+        .from(githubPullRequests)
+        .where(
+          and(
+            eq(githubPullRequests.projectRepositoryId, projectRepo[0].id),
+            eq(githubPullRequests.headBranch, check_suite.head_branch),
+            eq(githubPullRequests.state, 'open') // Only update open PRs
+          )
+        );
+
+      for (const pr of prsWithBranch) {
+        // Determine checks status based on check suite conclusion
+        let checksStatus = 'pending';
+        if (check_suite.conclusion === 'success') {
+          checksStatus = 'success';
+        } else if (check_suite.conclusion === 'failure' || check_suite.conclusion === 'timed_out') {
+          checksStatus = 'failure';
+        } else if (check_suite.status === 'in_progress' || check_suite.status === 'queued') {
+          checksStatus = 'pending';
+        }
+
+        await db
+          .update(githubPullRequests)
+          .set({
+            checksStatus: checksStatus,
+            githubUpdatedAt: new Date(),
+          })
+          .where(eq(githubPullRequests.id, pr.id));
+
+        console.log(`Updated PR #${pr.githubPrNumber} checks status to: ${checksStatus} (conclusion: ${check_suite.conclusion})`);
+      }
+    }
+  }
 
   // Record check suite activity
   for (const repo of linkedRepos) {
@@ -476,8 +603,8 @@ async function processCheckSuiteEvent(payload: any) {
       projectRepositoryId: repo.id,
       activityType: `check_suite_${action}`,
       actorLogin: sender.login,
-      title: `Check Suite ${action}`,
-      description: `Check suite ${check_suite.status} with conclusion ${check_suite.conclusion}`,
+      title: `CI/CD ${check_suite.conclusion?.replace('_', ' ') || check_suite.status}`,
+      description: `Check suite completed with ${check_suite.conclusion || check_suite.status} on branch ${check_suite.head_branch}`,
       metadata: {
         repository: repository.full_name,
         checkSuiteId: check_suite.id,

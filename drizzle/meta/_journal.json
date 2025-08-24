@@ -36,6 +36,13 @@
       "when": 1755785472000,
       "tag": "0010_add_project_key_and_task_id",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1755943320776,
+      "tag": "0005_cold_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

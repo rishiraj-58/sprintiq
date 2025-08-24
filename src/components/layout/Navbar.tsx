@@ -49,22 +49,76 @@ export function Navbar() {
     (async () => {
       if (projectMatch && projectMatch[1]) {
         const projectId = projectMatch[1];
+        console.log('Detected project path:', projectId, 'Current project:', currentProject?.id);
+
         // If current project not set or different, fetch and set
         if (!currentProject || currentProject.id !== projectId) {
-          const res = await fetch(`/api/projects/${projectId}`, { headers: { 'Cache-Control': 'no-cache' } });
-          if (res.ok) {
-            const proj = await res.json();
-            setCurrentProject(proj);
-            // Ensure workspace set
-            const wsId: string | undefined = proj.workspaceId;
-            if (wsId && (!currentWorkspace || currentWorkspace.id !== wsId)) {
-              const list = workspaces.length ? workspaces : await fetchWorkspaces();
-              const found = list.find(w => w.id === wsId) || null;
-              if (found) setCurrentWorkspace(found);
-              localStorage.setItem('siq:lastWorkspaceId', wsId);
-              await fetchProjects(wsId);
+          console.log('Fetching project data for:', projectId);
+          try {
+            const res = await fetch(`/api/projects/${projectId}`, { headers: { 'Cache-Control': 'no-cache' } });
+            if (res.ok) {
+              const proj = await res.json();
+              console.log('Setting current project:', proj.name);
+              setCurrentProject(proj);
+
+              // Ensure workspace set
+              const wsId: string | undefined = proj.workspaceId;
+              if (wsId && (!currentWorkspace || currentWorkspace.id !== wsId)) {
+                console.log('Setting workspace for project:', wsId);
+                const list = workspaces.length ? workspaces : await fetchWorkspaces();
+                const found = list.find(w => w.id === wsId) || null;
+                if (found) setCurrentWorkspace(found);
+                localStorage.setItem('siq:lastWorkspaceId', wsId);
+                await fetchProjects(wsId);
+              }
+              localStorage.setItem('siq:lastProjectId', projectId);
+            } else {
+              console.error('Failed to fetch project:', projectId, res.status);
             }
-            localStorage.setItem('siq:lastProjectId', projectId);
+          } catch (error) {
+            console.error('Error fetching project:', error);
+          }
+        }
+      } else if (isTaskPath) {
+        const taskMatch = pathname?.match(/\/tasks\/(.+?)(?:$|\/)/);
+        if (taskMatch && taskMatch[1]) {
+          const taskId = taskMatch[1];
+          console.log('Detected task path:', taskId);
+
+          // If we don't have current project, try to fetch task to get project info
+          if (!currentProject) {
+            console.log('Fetching task data to get project info for:', taskId);
+            try {
+              const res = await fetch(`/api/tasks/${taskId}`, { headers: { 'Cache-Control': 'no-cache' } });
+              if (res.ok) {
+                const task = await res.json();
+                if (task.projectId) {
+                  console.log('Task has project ID:', task.projectId, 'Fetching project...');
+                  const projectRes = await fetch(`/api/projects/${task.projectId}`, { headers: { 'Cache-Control': 'no-cache' } });
+                  if (projectRes.ok) {
+                    const proj = await projectRes.json();
+                    console.log('Setting current project from task:', proj.name);
+                    setCurrentProject(proj);
+
+                    // Ensure workspace set
+                    const wsId: string | undefined = proj.workspaceId;
+                    if (wsId && (!currentWorkspace || currentWorkspace.id !== wsId)) {
+                      console.log('Setting workspace for project:', wsId);
+                      const list = workspaces.length ? workspaces : await fetchWorkspaces();
+                      const found = list.find(w => w.id === wsId) || null;
+                      if (found) setCurrentWorkspace(found);
+                      localStorage.setItem('siq:lastWorkspaceId', wsId);
+                      await fetchProjects(wsId);
+                    }
+                    localStorage.setItem('siq:lastProjectId', task.projectId);
+                  }
+                }
+              } else {
+                console.error('Failed to fetch task:', taskId, res.status);
+              }
+            } catch (error) {
+              console.error('Error fetching task:', error);
+            }
           }
         }
       } else if (workspaceMatch && workspaceMatch[1]) {
@@ -75,6 +129,16 @@ export function Navbar() {
           if (found) setCurrentWorkspace(found);
           localStorage.setItem('siq:lastWorkspaceId', wsId);
           await fetchProjects(wsId);
+        }
+      } else if (shouldShowProjectDropdown && !currentProject) {
+        // Fallback: Try to load project from localStorage when on project/task path but no current project
+        const lastProjectId = localStorage.getItem('siq:lastProjectId');
+        if (lastProjectId && projects.length > 0) {
+          const projectFromCache = projects.find(p => p.id === lastProjectId);
+          if (projectFromCache) {
+            console.log('Loading project from cache:', projectFromCache.name);
+            setCurrentProject(projectFromCache);
+          }
         }
       }
     })();
@@ -132,7 +196,23 @@ export function Navbar() {
 
   const isHome = pathname === '/' || pathname === '/dashboard' || pathname === '/get-started';
   const isProjectPath = /\/projects\//.test(pathname || '');
+  const isTaskPath = /\/tasks\//.test(pathname || '');
   const isWorkspacePath = /\/dashboard\/workspace\//.test(pathname || '') || /\/workspaces\/?$/.test(pathname || '');
+
+  // Determine if we should show project dropdown
+  const shouldShowProjectDropdown = isProjectPath || isTaskPath;
+
+  console.log('Navbar debug:', {
+    pathname,
+    isProjectPath,
+    isTaskPath,
+    shouldShowProjectDropdown,
+    currentProject: currentProject?.name,
+    currentWorkspace: currentWorkspace?.name,
+    projectsCount: projects.length,
+    lastProjectId: typeof window !== 'undefined' ? localStorage.getItem('siq:lastProjectId') : null,
+    projectsInCache: projects.filter(p => p.id === localStorage.getItem('siq:lastProjectId')).map(p => p.name)
+  });
 
   return (
     <nav className="sticky top-0 z-[60] border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -212,7 +292,7 @@ export function Navbar() {
           )}
 
           {/* Project Switcher inline */}
-          {currentWorkspace && isProjectPath && (
+          {shouldShowProjectDropdown && (
             <>
               <span className="text-muted-foreground">/</span>
               <div className="relative" data-dropdown="proj">
@@ -222,7 +302,11 @@ export function Navbar() {
                   aria-expanded={projOpen}
                   aria-haspopup="menu"
                 >
-                  <span className="font-medium">{(typeof window !== 'undefined' && (projects.find(p => p.id === localStorage.getItem('siq:lastProjectId'))?.name)) || currentProject?.name || 'Select project'}</span>
+                  <span className="font-medium">
+                    {currentProject?.name ||
+                     (typeof window !== 'undefined' && projects.find(p => p.id === localStorage.getItem('siq:lastProjectId'))?.name) ||
+                     'Loading project...'}
+                  </span>
                   <ChevronsUpDown className="h-4 w-4" />
                 </button>
                 {projOpen && (
@@ -252,11 +336,22 @@ export function Navbar() {
                         }}
                       >
                         <span className="truncate" title={p.name}>{p.name}</span>
+                        {currentProject?.id === p.id && <span className="text-xs text-muted-foreground">current</span>}
                       </button>
                     ))}
                     {filteredProjects.length === 0 && (
-                      <div className="px-2 py-1 text-xs text-muted-foreground">No projects found</div>
+                      <div className="px-2 py-1 text-xs text-muted-foreground">
+                        {projects.length === 0 ? 'Loading projects...' : 'No projects found'}
+                      </div>
                     )}
+                  </div>
+                  <div className="mt-2 border-t pt-2">
+                    <button
+                      className="w-full rounded px-2 py-1 text-left hover:bg-accent"
+                      onClick={() => router.push('/projects' + (currentWorkspace ? `?workspaceId=${currentWorkspace.id}` : ''))}
+                    >
+                      View all projects
+                    </button>
                   </div>
                   {wsPerms.canCreate && (
                     <div className="mt-2 border-t pt-2">

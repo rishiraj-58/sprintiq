@@ -91,6 +91,7 @@ export type TaskAttachment = typeof taskAttachments.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type TaskSubtask = typeof taskSubtasks.$inferSelect;
 export type TaskLink = typeof taskLinks.$inferSelect;
+export type ExternalTaskLink = typeof externalTaskLinks.$inferSelect;
 export type TaskLabel = typeof taskLabels.$inferSelect;
 export type TaskAuditLog = typeof taskAuditLogs.$inferSelect;
 export type TaskHistory = typeof taskHistory.$inferSelect;
@@ -288,6 +289,19 @@ export const taskLinks = pgTable('task_links', {
   taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
   linkedTaskId: uuid('linked_task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
   relation: varchar('relation', { length: 30 }).notNull(), // blocks | is_blocked_by | related
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// External Task Links (for GitHub issues, external URLs, etc.)
+export const externalTaskLinks = pgTable('external_task_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  linkType: varchar('link_type', { length: 30 }).notNull(), // github_issue | github_pr | external_url
+  externalUrl: text('external_url').notNull(),
+  title: varchar('title', { length: 300 }).notNull(),
+  description: text('description'),
+  externalId: varchar('external_id', { length: 100 }), // GitHub issue/PR number, etc.
+  metadata: jsonb('metadata'), // Additional data like labels, author, etc.
   createdAt: timestamp('created_at').defaultNow(),
 });
 

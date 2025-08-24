@@ -155,6 +155,16 @@ export default function SettingsPage({ params }: SettingsPageProps) {
   const [showAllReposDialog, setShowAllReposDialog] = useState(false);
   const [repoSearchQuery, setRepoSearchQuery] = useState('');
 
+  // GitHub Issues Triage state
+  const [unlinkedIssues, setUnlinkedIssues] = useState<any[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesError, setIssuesError] = useState<string | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [importingTask, setImportingTask] = useState(false);
+  const [lastIssuesFetch, setLastIssuesFetch] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('general');
+
   useEffect(() => {
     const loadProjectData = async () => {
       try {
@@ -268,6 +278,13 @@ export default function SettingsPage({ params }: SettingsPageProps) {
     }
   }, [params.projectId]);
 
+  // Auto-load GitHub issues when GitHub Triage tab is opened
+  useEffect(() => {
+    if (activeTab === 'github-triage' && githubIntegration && linkedRepositories.length > 0) {
+      loadUnlinkedIssues();
+    }
+  }, [activeTab, githubIntegration, linkedRepositories]);
+
   const linkRepository = async (repository: any) => {
     try {
       const response = await fetch(`/api/projects/${params.projectId}/repositories`, {
@@ -315,6 +332,107 @@ export default function SettingsPage({ params }: SettingsPageProps) {
       console.error('Error unlinking repository:', error);
       setSaveMessage('Failed to unlink repository');
       setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
+
+  // Load unlinked GitHub issues
+  const loadUnlinkedIssues = async (forceRefresh = false) => {
+    try {
+      setIssuesLoading(true);
+      setIssuesError(null);
+
+      // Check if we have cached issues and it's been less than 5 minutes since last fetch
+      const now = Date.now();
+      const cacheDuration = 5 * 60 * 1000; // 5 minutes
+
+      if (!forceRefresh && lastIssuesFetch && (now - lastIssuesFetch) < cacheDuration && unlinkedIssues.length > 0) {
+        console.log('Using cached issues, last fetch was', Math.round((now - lastIssuesFetch) / 1000), 'seconds ago');
+        setIssuesLoading(false);
+        return;
+      }
+
+      const response = await fetch(`/api/github/issues/unlinked?projectId=${params.projectId}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setUnlinkedIssues(data.issues || []);
+        setLastIssuesFetch(now);
+        console.log(`Loaded ${data.issues?.length || 0} unlinked GitHub issues`);
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to fetch unlinked issues:', errorText);
+        setIssuesError(`Failed to load issues: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error loading unlinked issues:', error);
+      setIssuesError('Failed to load GitHub issues');
+    } finally {
+      setIssuesLoading(false);
+    }
+  };
+
+  // Import GitHub issue as SprintIQ task
+  const importIssueAsTask = async (issue: any) => {
+    try {
+      setImportingTask(true);
+
+      // Create the task
+      const taskData = {
+        title: issue.title,
+        description: issue.body || `Imported from GitHub issue #${issue.number}`,
+        projectId: params.projectId,
+        status: 'pending',
+        priority: 'medium',
+        taskType: 'bug', // Default to bug since it's coming from GitHub issues
+        externalUrl: issue.htmlUrl,
+        externalSource: 'github_issue',
+        externalId: issue.id.toString(),
+      };
+
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData),
+      });
+
+      if (response.ok) {
+        const newTask = await response.json();
+
+        // Create external task link to track the GitHub issue connection
+        await fetch(`/api/tasks/${newTask.id}/external-links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            linkType: 'github_issue',
+            externalUrl: issue.htmlUrl,
+            title: `GitHub Issue #${issue.number}`,
+            description: issue.title,
+            externalId: issue.id.toString(),
+            metadata: {
+              issueNumber: issue.number,
+              repository: issue.repository.fullName,
+              author: issue.author,
+              labels: issue.labels,
+              createdAt: issue.createdAt,
+            },
+          }),
+        });
+
+        // Refresh issues list
+        await loadUnlinkedIssues();
+        setSaveMessage('Issue imported as task successfully');
+        setTimeout(() => setSaveMessage(null), 3000);
+        setShowImportDialog(false);
+        setSelectedIssue(null);
+      } else {
+        throw new Error('Failed to create task');
+      }
+    } catch (error) {
+      console.error('Error importing issue as task:', error);
+      setSaveMessage('Failed to import issue as task');
+      setTimeout(() => setSaveMessage(null), 3000);
+    } finally {
+      setImportingTask(false);
     }
   };
 
@@ -528,11 +646,12 @@ export default function SettingsPage({ params }: SettingsPageProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="github-triage">GitHub Triage</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="danger">Danger Zone</TabsTrigger>
@@ -1034,6 +1153,228 @@ export default function SettingsPage({ params }: SettingsPageProps) {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* GitHub Triage */}
+        <TabsContent value="github-triage" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                GitHub Issues Triage
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Import GitHub issues that aren't yet linked to SprintIQ tasks
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!githubIntegration ? (
+                <div className="text-center py-8">
+                  <div className="mx-auto h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <GitBranch className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-medium mb-2">GitHub Not Connected</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Connect your workspace to GitHub to access issues triage.
+                  </p>
+                  <Button onClick={() => router.push(`/dashboard/workspace/${settings.general.workspaceId}?tab=integrations`)}>
+                    Connect GitHub
+                  </Button>
+                </div>
+              ) : linkedRepositories.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="mx-auto h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <Circle className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <h3 className="font-medium mb-2">No Linked Repositories</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Link at least one GitHub repository to access issues triage.
+                  </p>
+                  <Button onClick={() => {
+                    const tabElement = document.querySelector('[value="integrations"]') as HTMLElement;
+                    if (tabElement) tabElement.click();
+                  }}>
+                    Link Repository
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium">Unlinked GitHub Issues</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Issues from linked repositories that aren't yet SprintIQ tasks
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => loadUnlinkedIssues(true)}
+                      disabled={issuesLoading}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {issuesLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4 mr-2" />
+                          Refresh
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {issuesError && (
+                    <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+                      <AlertCircle className="h-4 w-4 text-destructive mb-2" />
+                      <p className="text-sm text-destructive">{issuesError}</p>
+                    </div>
+                  )}
+
+                  {unlinkedIssues.length === 0 && !issuesLoading && !issuesError && (
+                    <div className="text-center py-8 bg-muted/50 rounded-lg">
+                      <CheckCircle2 className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        All GitHub issues are already linked to SprintIQ tasks!
+                      </p>
+                    </div>
+                  )}
+
+                  {unlinkedIssues.length > 0 && (
+                    <div className="space-y-3">
+                      {unlinkedIssues.map((issue) => (
+                        <div key={issue.id} className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h5 className="font-medium text-sm truncate">{issue.title}</h5>
+                              <Badge variant="outline" className="text-xs">
+                                #{issue.number}
+                              </Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                {issue.repository.name}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                              {issue.body || 'No description provided'}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>Created {new Date(issue.createdAt).toLocaleDateString()}</span>
+                              {issue.author && (
+                                <span>by {issue.author}</span>
+                              )}
+                              {issue.labels.length > 0 && (
+                                <div className="flex gap-1">
+                                  {issue.labels.slice(0, 3).map((label: any) => (
+                                    <Badge
+                                      key={label.name}
+                                      variant="outline"
+                                      className="text-xs px-1 py-0"
+                                      style={{
+                                        borderColor: `#${label.color}`,
+                                        color: `#${label.color}`
+                                      }}
+                                    >
+                                      {label.name}
+                                    </Badge>
+                                  ))}
+                                  {issue.labels.length > 3 && (
+                                    <Badge variant="outline" className="text-xs px-1 py-0">
+                                      +{issue.labels.length - 3}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(issue.htmlUrl, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedIssue(issue);
+                                setShowImportDialog(true);
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Import
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Import Issue Dialog */}
+        <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Import GitHub Issue as Task</DialogTitle>
+              <DialogDescription>
+                Create a new SprintIQ task from this GitHub issue
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedIssue && (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-medium text-sm mb-2">{selectedIssue.title}</h4>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    #{selectedIssue.number} • {selectedIssue.repository.fullName}
+                  </p>
+                  <p className="text-sm line-clamp-3">
+                    {selectedIssue.body || 'No description provided'}
+                  </p>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  This will create a new SprintIQ task with the GitHub issue details and link them together.
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setSelectedIssue(null);
+                }}
+                disabled={importingTask}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => selectedIssue && importIssueAsTask(selectedIssue)}
+                disabled={importingTask}
+              >
+                {importingTask ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Import as Task
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Notifications */}
         <TabsContent value="notifications" className="space-y-6">

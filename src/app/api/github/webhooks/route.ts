@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { githubIntegrations, projectRepositories, githubActivities, githubBranches, githubPullRequests } from '@/db/schema';
+import { githubIntegrations, projectRepositories, githubActivities, githubBranches, githubPullRequests, tasks } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -46,6 +46,12 @@ async function processWebhookEvent(event: string, payload: any) {
         break;
       case 'issue_comment':
         await processIssueCommentEvent(payload);
+        break;
+      case 'issue_opened':
+      case 'issue_closed':
+      case 'issue_reopened':
+      case 'issue_edited':
+        await processIssuesEvent(payload);
         break;
       case 'pull_request_review':
         await processPullRequestReviewEvent(payload);
@@ -240,6 +246,44 @@ async function processPullRequestEvent(payload: any) {
           await db.insert(githubPullRequests).values(prData);
           console.log(`Created new PR #${pull_request.number} with state: ${prData.state}`);
         }
+
+        // Automatically update linked task status when PR is merged
+        if (pull_request.merged && linkedBranch.length > 0) {
+          const taskId = linkedBranch[0].taskId;
+          console.log(`PR #${pull_request.number} merged, updating linked task ${taskId} status to 'done'`);
+
+          try {
+            await db
+              .update(tasks)
+              .set({
+                status: 'done',
+                updatedAt: new Date()
+              })
+              .where(eq(tasks.id, taskId));
+
+            console.log(`Successfully updated task ${taskId} status to 'done'`);
+
+            // Record task status update activity
+            await db.insert(githubActivities).values({
+              projectRepositoryId: prData.projectRepositoryId,
+              taskId: taskId,
+              activityType: 'task_status_update',
+              actorLogin: pull_request.merged_by?.login || 'github',
+              title: 'Task completed via PR merge',
+              description: `Task automatically marked as done when PR #${pull_request.number} was merged`,
+              metadata: {
+                prNumber: pull_request.number,
+                prTitle: pull_request.title,
+                mergedBy: pull_request.merged_by?.login,
+                autoStatusUpdate: true
+              },
+              githubCreatedAt: new Date(),
+            });
+          } catch (error) {
+            console.error(`Failed to update task ${taskId} status:`, error);
+          }
+        }
+
         console.log(`Successfully processed PR #${pull_request.number}`);
       } catch (error) {
         console.error(`Error saving PR #${pull_request.number}:`, error);
@@ -270,6 +314,43 @@ async function processPullRequestEvent(payload: any) {
             })
             .where(eq(githubPullRequests.id, existingPR[0].id));
           console.log(`Updated PR #${pull_request.number} state to: ${prData.state}`);
+
+          // Automatically update linked task status when PR is merged (even in 'closed' action)
+          if (pull_request.merged && linkedBranch.length > 0) {
+            const taskId = linkedBranch[0].taskId;
+            console.log(`PR #${pull_request.number} merged (via closed action), updating linked task ${taskId} status to 'done'`);
+
+            try {
+              await db
+                .update(tasks)
+                .set({
+                  status: 'done',
+                  updatedAt: new Date()
+                })
+                .where(eq(tasks.id, taskId));
+
+              console.log(`Successfully updated task ${taskId} status to 'done'`);
+
+              // Record task status update activity
+              await db.insert(githubActivities).values({
+                projectRepositoryId: prData.projectRepositoryId,
+                taskId: taskId,
+                activityType: 'task_status_update',
+                actorLogin: pull_request.merged_by?.login || 'github',
+                title: 'Task completed via PR merge',
+                description: `Task automatically marked as done when PR #${pull_request.number} was merged`,
+                metadata: {
+                  prNumber: pull_request.number,
+                  prTitle: pull_request.title,
+                  mergedBy: pull_request.merged_by?.login,
+                  autoStatusUpdate: true
+                },
+                githubCreatedAt: new Date(),
+              });
+            } catch (error) {
+              console.error(`Failed to update task ${taskId} status:`, error);
+            }
+          }
         }
       } catch (error) {
         console.error(`Error updating PR #${pull_request.number} state:`, error);
@@ -379,8 +460,21 @@ async function processDeleteEvent(payload: any) {
 
 // Process issue events
 async function processIssuesEvent(payload: any) {
-  const { action, issue, repository, sender } = payload;
-  
+  console.log(`Processing issue webhook: ${payload.action || 'unknown action'}`);
+
+  // Handle different payload structures for issues vs issue_* events
+  const issue = payload.issue || payload;
+  const action = payload.action || 'unknown';
+  const repository = payload.repository;
+  const sender = payload.sender;
+
+  if (!issue || !repository) {
+    console.log('Missing issue or repository data in webhook payload');
+    return;
+  }
+
+  console.log(`Processing issue #${issue.number} with action: ${action} in repo: ${repository.full_name}`);
+
   // Find linked project repositories for this repository
   const linkedRepos = await db
     .select({
@@ -389,6 +483,8 @@ async function processIssuesEvent(payload: any) {
     })
     .from(projectRepositories)
     .where(eq(projectRepositories.githubRepoId, repository.id.toString()));
+
+  console.log(`Found ${linkedRepos.length} linked repositories for issue webhook`);
 
   if (linkedRepos.length === 0) return;
 
@@ -408,10 +504,14 @@ async function processIssuesEvent(payload: any) {
         author: sender.login,
         action: action,
         url: issue.html_url,
+        state: issue.state,
+        labels: issue.labels || [],
       },
       githubCreatedAt: new Date(),
     });
   }
+
+  console.log(`Successfully processed issue #${issue.number} webhook`);
 }
 
 // Process issue comment events

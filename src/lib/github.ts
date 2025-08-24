@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { projects, tasks, bugs, projectRepositories, githubIntegrations, githubBranches, githubPullRequests, githubActivities } from '@/db/schema';
+import { projects, tasks, bugs, projectRepositories, githubIntegrations, githubBranches, githubPullRequests, githubActivities, taskLinks } from '@/db/schema';
 import { eq, and, desc, max } from 'drizzle-orm';
 import { Octokit } from '@octokit/rest';
 
@@ -106,6 +106,47 @@ export class GitHubService {
     this.octokit = new Octokit({
       auth: accessToken,
     });
+  }
+
+  // Get issues for a specific repository
+  async getRepositoryIssues(owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') {
+    try {
+      const { data } = await this.octokit.rest.issues.listForRepo({
+        owner,
+        repo,
+        state,
+        per_page: 100,
+        sort: 'updated',
+        direction: 'desc',
+      });
+
+      // Filter out pull requests (GitHub treats PRs as issues too)
+      const issues = data.filter((item: any) => !item.pull_request);
+
+      return issues.map((issue: any) => ({
+        id: issue.id.toString(),
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+        state: issue.state,
+        htmlUrl: issue.html_url,
+        createdAt: issue.created_at,
+        updatedAt: issue.updated_at,
+        author: issue.user?.login,
+        labels: issue.labels?.map((label: any) => ({
+          name: label.name,
+          color: label.color,
+        })) || [],
+        assignee: issue.assignee?.login,
+        repository: {
+          name: repo,
+          fullName: `${owner}/${repo}`,
+        },
+      }));
+    } catch (error: any) {
+      console.error(`Error fetching issues for ${owner}/${repo}:`, error);
+      throw error;
+    }
   }
 
   // Get repositories for an organization or user

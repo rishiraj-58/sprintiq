@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
         highPriority: recentTasks.filter(t => t.priority === 'high').length,
         withoutEstimates: recentTasks.filter(t => !t.storyPoints).length,
         stalled: recentTasks.filter(t => {
+          if (!t.updatedAt) return false;
           const daysSinceUpdate = Math.floor((new Date().getTime() - new Date(t.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
           return daysSinceUpdate >= 7 && t.status !== 'done';
         }).length

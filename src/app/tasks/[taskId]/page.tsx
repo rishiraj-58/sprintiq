@@ -14,16 +14,16 @@ interface TaskDetailPageProps {
 
 export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
   let profile = null;
-  let authError = null;
+  let authError: Error | null = null;
 
   try {
     profile = await requireAuth();
   } catch (error) {
     console.error('Authentication error:', error);
-    authError = error;
+    authError = error instanceof Error ? error : null;
 
     // If it's a connection error, try to continue without auth for now
-    if (error.message && (
+    if (error instanceof Error && error.message && (
       error.message.includes('CONNECT_TIMEOUT') ||
       error.message.includes('Database connection temporarily unavailable') ||
       error.message.includes('Not authenticated or profile not found')
@@ -91,7 +91,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       console.error('Database error fetching task:', dbError);
 
       // If it's a connection error, show a user-friendly message instead of 404
-      if (dbError.message && dbError.message.includes('CONNECT_TIMEOUT')) {
+      if (dbError instanceof Error && dbError.message && dbError.message.includes('CONNECT_TIMEOUT')) {
         return (
           <div className="min-h-screen bg-background flex items-center justify-center">
             <div className="text-center space-y-4 max-w-md mx-auto p-6">
@@ -145,7 +145,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         console.error('Error checking workspace membership:', membershipError);
 
         // If it's a connection error, skip membership check
-        if (membershipError.message && membershipError.message.includes('CONNECT_TIMEOUT')) {
+        if (membershipError instanceof Error && membershipError.message && membershipError.message.includes('CONNECT_TIMEOUT')) {
           console.log('Skipping workspace membership check due to connection issues');
         } else {
           notFound();
@@ -162,7 +162,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
     console.error('Error fetching task:', error);
 
     // Check if it's a database connection error
-    if (error.message && (
+    if (error instanceof Error && error.message && (
       error.message.includes('CONNECT_TIMEOUT') ||
       error.message.includes('Database connection temporarily unavailable') ||
       error.message.includes('Not authenticated or profile not found')

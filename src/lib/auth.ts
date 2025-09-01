@@ -77,7 +77,7 @@ export async function getCurrentUserProfile() {
       console.error(`Error in getCurrentUserProfile (attempt ${attempt + 1}/${maxRetries + 1}):`, error);
 
       // If it's a connection timeout and we haven't exhausted retries, wait and try again
-      if (error.message && error.message.includes('CONNECT_TIMEOUT') && attempt < maxRetries) {
+      if (error instanceof Error && error.message && error.message.includes('CONNECT_TIMEOUT') && attempt < maxRetries) {
         console.log(`Retrying database operation in ${1000 * (attempt + 1)}ms...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
         continue;
@@ -104,7 +104,7 @@ export async function requireAuth() {
     console.error('Authentication error:', error);
 
     // If it's a database connection error, provide a more helpful message
-    if (error.message && error.message.includes('CONNECT_TIMEOUT')) {
+    if (error instanceof Error && error.message && error.message.includes('CONNECT_TIMEOUT')) {
       throw new Error('Database connection temporarily unavailable. Please try again in a moment.');
     }
 

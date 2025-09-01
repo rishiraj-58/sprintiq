@@ -336,17 +336,18 @@ export function AIHubChatInterface({ userId }: AIHubChatInterfaceProps) {
                     <div className="prose prose-sm max-w-none dark:prose-invert">
                       <ReactMarkdown
                         components={{
-                          code: ({ inline, children }) => (
-                            inline ? (
-                              <code className="bg-background/50 px-1 py-0.5 rounded text-sm">
+                          code: ({ className, children, ...props }) => {
+                            const isInline = !className?.includes('language-');
+                            return isInline ? (
+                              <code className="bg-background/50 px-1 py-0.5 rounded text-sm" {...props}>
                                 {children}
                               </code>
                             ) : (
                               <pre className="bg-background/80 p-3 rounded-lg overflow-x-auto">
-                                <code>{children}</code>
+                                <code className={className} {...props}>{children}</code>
                               </pre>
-                            )
-                          ),
+                            );
+                          },
                         }}
                       >
                         {message.content}

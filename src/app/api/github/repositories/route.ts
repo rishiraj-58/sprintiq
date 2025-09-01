@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user has access to workspace
+    if (!userId) {
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+    }
+
     const workspaceMember = await db
       .select()
       .from(workspaceMembers)

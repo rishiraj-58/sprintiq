@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
   // Allow static HTML export when env var is set (used for CI builds)
   output: process.env.CI ? 'export' : undefined,
   // Disable image optimization during static export

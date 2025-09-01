@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
         unassignedTasks: allTasks.filter(t => !t.assigneeId).length,
         highPriorityTasks: allTasks.filter(t => t.priority === 'high').length,
         stalledTasks: allTasks.filter(t => {
+          if (!t.updatedAt) return false;
           const daysSinceUpdate = Math.floor((new Date().getTime() - new Date(t.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
           return daysSinceUpdate >= 7 && t.status !== 'done';
         }).length,

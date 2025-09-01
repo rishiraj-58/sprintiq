@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PRStatusBadges } from '@/components/github/PRStatusBadges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,16 +59,16 @@ interface TaskDetailData {
   };
   assignee?: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
     avatarUrl: string | null;
   } | null;
   creator?: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
     avatarUrl: string | null;
   } | null;
 }
@@ -268,17 +269,27 @@ export function TaskDetailClientPage({ task, authError }: TaskDetailClientPagePr
 
   // Load GitHub integration data
   useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounts
+    let timeoutId: NodeJS.Timeout;
+
     const loadGithubData = async () => {
+      if (githubLoading) return; // Prevent multiple simultaneous calls
+
       try {
         setGithubLoading(true);
 
         // Load linked repositories for this project
         const reposRes = await fetch(`/api/projects/${task.projectId}/repositories`);
+        if (!isMounted) return; // Check if component is still mounted
+
         let loadedRepositories: LinkedRepository[] = [];
         if (reposRes.ok) {
           const reposData = await reposRes.json();
           loadedRepositories = reposData.repositories || [];
           setLinkedRepositories(loadedRepositories);
+        } else {
+          console.error(`Failed to load repositories: ${reposRes.status}`);
+          setLinkedRepositories([]); // Set empty array on error
         }
 
         // Check for existing branches for this task
@@ -402,19 +413,43 @@ export function TaskDetailClientPage({ task, authError }: TaskDetailClientPagePr
 
         // Load GitHub activities for this task (for unified feed)
         const activitiesRes = await fetch(`/api/tasks/${task.id}/github/activities`);
+        if (!isMounted) return; // Check if component is still mounted
+
         if (activitiesRes.ok) {
           const activitiesData = await activitiesRes.json();
           setGithubActivities(activitiesData.activities || []);
+        } else {
+          console.error(`Failed to load activities: ${activitiesRes.status}`);
+          setGithubActivities([]); // Set empty array on error
         }
       } catch (error) {
         console.error('Error loading GitHub data:', error);
+        if (isMounted) {
+          setLinkedRepositories([]); // Reset on error
+          setGithubActivities([]);
+        }
       } finally {
-        setGithubLoading(false);
+        if (isMounted) {
+          setGithubLoading(false);
+        }
       }
     };
 
-    loadGithubData();
-  }, [task.id, task.projectId]);
+    // Debounce the loading to prevent rapid calls
+    timeoutId = setTimeout(() => {
+      if (isMounted) {
+        loadGithubData();
+      }
+    }, 100);
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [task.id, task.projectId, githubLoading]); // Added githubLoading to dependencies
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -801,63 +836,13 @@ export function TaskDetailClientPage({ task, authError }: TaskDetailClientPagePr
                             </Button>
                           </div>
                           
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
-                              {pr.state === 'closed' ? <AlertCircle className="h-4 w-4 text-red-600" /> :
-                               pr.state === 'merged' ? <CheckCircle2 className="h-4 w-4 text-green-600" /> :
-                               getReviewStatusIcon(pr.reviewStatus)}
-                              <span className="text-xs capitalize">
-                                {pr.state === 'closed' ? 'PR Closed' :
-                                 pr.state === 'merged' ? 'PR Merged' :
-                                 pr.reviewStatus === 'pending' ? 'Review Pending' :
-                                 pr.reviewStatus.replace('_', ' ')}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Enhanced Status Badges */}
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {/* CI/CD Status Badge */}
-                            {pr.checksStatus === 'success' && (
-                              <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
-                                ✅ Checks Passed
-                              </Badge>
-                            )}
-                            {pr.checksStatus === 'failure' && (
-                              <Badge variant="destructive" className="text-xs">
-                                ❌ Checks Failed
-                              </Badge>
-                            )}
-                            {pr.checksStatus === 'pending' && (
-                              <Badge variant="secondary" className="text-xs">
-                                🔄 Checks Running
-                              </Badge>
-                            )}
-
-                            {/* Review Status Badge */}
-                            {pr.reviewStatus === 'approved' && (
-                              <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
-                                ✅ Review Approved
-                              </Badge>
-                            )}
-                            {pr.reviewStatus === 'changes_requested' && (
-                              <Badge variant="destructive" className="text-xs">
-                                🔍 Changes Requested
-                              </Badge>
-                            )}
-                            {pr.reviewStatus === 'pending' && (
-                              <Badge variant="outline" className="text-xs">
-                                🔍 Review Requested
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <Badge 
-                            variant={pr.state === 'open' ? 'default' : pr.state === 'merged' ? 'secondary' : 'outline'}
-                            className="text-xs"
-                          >
-                            {pr.isDraft ? 'Draft' : pr.state}
-                          </Badge>
+                          {/* Live Status Badges */}
+                          <PRStatusBadges pullRequest={{
+                            state: pr.state as 'open' | 'closed' | 'merged',
+                            reviewStatus: pr.reviewStatus as 'pending' | 'approved' | 'changes_requested',
+                            checksStatus: pr.checksStatus as 'pending' | 'success' | 'failure',
+                            isDraft: pr.isDraft || false
+                          }} />
                         </div>
                       ))}
                     </div>

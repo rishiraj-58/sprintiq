@@ -321,9 +321,9 @@ export function AIHubClient({ userId }: AIHubClientProps) {
                     <div className="prose prose-sm max-w-none dark:prose-invert">
                       <ReactMarkdown
                         components={{
-                          code: ({ node, inline, className, children, ...props }) => {
+                          code: ({ node, className, children, ...props }) => {
                             const match = /language-(\w+)/.exec(className || '');
-                            const isInline = inline;
+                            const isInline = !className?.includes('language-');
                             
                             if (!isInline && match && match[1] === 'mermaid') {
                               return (

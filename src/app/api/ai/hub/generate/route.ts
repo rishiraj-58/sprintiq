@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build conversation context
-    const messages = [
+    const messages: Array<{ role: 'user' | 'system' | 'assistant' | 'tool'; content: string }> = [
       { role: 'system', content: DOCUMENT_SYSTEM_PROMPT }
     ];
 

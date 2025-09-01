@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { bugs } from '@/db/schema';
+import { eq, desc } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,9 +59,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get the next project bug ID
+    const lastBug = await db
+      .select()
+      .from(bugs)
+      .where(eq(bugs.projectId, finalProjectId))
+      .orderBy(desc(bugs.projectBugId))
+      .limit(1);
+
+    const nextProjectBugId = lastBug.length > 0 ? lastBug[0].projectBugId + 1 : 1;
+
     const [created] = await db
       .insert(bugs)
       .values({
+        projectBugId: nextProjectBugId,
         title: title.trim(),
         description: description?.trim() || null,
         status: 'open',

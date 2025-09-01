@@ -13,8 +13,8 @@ interface Task {
   priority: string;
   assigneeId?: string | null;
   storyPoints?: number | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | null;
+  updatedAt: Date | null;
   dueDate?: Date | null;
   estimatedHours?: number | null;
 }
@@ -49,8 +49,8 @@ export function AITaskSuggestions({ task, projectId, onActionTaken }: AITaskSugg
   const generateSuggestions = () => {
     const newSuggestions: Suggestion[] = [];
     const now = new Date();
-    const daysSinceUpdate = Math.floor((now.getTime() - new Date(task.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
-    const daysSinceCreation = Math.floor((now.getTime() - new Date(task.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+    const daysSinceUpdate = task.updatedAt ? Math.floor((now.getTime() - new Date(task.updatedAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    const daysSinceCreation = task.createdAt ? Math.floor((now.getTime() - new Date(task.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
     // Task has been stalled (no updates for 7+ days and not completed)
     if (daysSinceUpdate >= 7 && task.status !== 'done' && task.status !== 'completed') {

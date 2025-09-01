@@ -201,7 +201,7 @@ export function TaskCard({ task, assignee, onEdit, selectMode = false, selected 
         </div>
 
         <div className="mt-2 text-xs text-muted-foreground">
-          Created {new Date(task.createdAt || '').toLocaleDateString()}
+          Created {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Unknown'}
         </div>
       </CardContent>
     </Card>

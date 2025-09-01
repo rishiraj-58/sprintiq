@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { githubIntegrations, projectRepositories, githubActivities, githubBranches, githubPullRequests, tasks } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { githubIntegrations, projectRepositories, githubActivities, githubBranches, githubPullRequests, tasks, externalTaskLinks, comments } from '@/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 // GitHub webhook secret for verification
@@ -219,7 +219,7 @@ async function processPullRequestEvent(payload: any) {
       state: prData.state
     });
 
-    if (action === 'opened' || action === 'synchronize' || action === 'reopened' || action === 'closed' || action === 'merged') {
+    if (action === 'opened' || action === 'synchronize' || action === 'reopened' || action === 'closed' || action === 'merged' || action === 'ready_for_review') {
       console.log(`Processing PR #${pull_request.number} with action: ${action}`);
       try {
         // Check if PR already exists for this repository
@@ -253,6 +253,7 @@ async function processPullRequestEvent(payload: any) {
           console.log(`PR #${pull_request.number} merged, updating linked task ${taskId} status to 'done'`);
 
           try {
+            // Update task status to 'done' and record merge timestamp
             await db
               .update(tasks)
               .set({
@@ -275,6 +276,7 @@ async function processPullRequestEvent(payload: any) {
                 prNumber: pull_request.number,
                 prTitle: pull_request.title,
                 mergedBy: pull_request.merged_by?.login,
+                mergedAt: pull_request.merged_at,
                 autoStatusUpdate: true
               },
               githubCreatedAt: new Date(),
@@ -517,7 +519,9 @@ async function processIssuesEvent(payload: any) {
 // Process issue comment events
 async function processIssueCommentEvent(payload: any) {
   const { action, issue, comment, repository, sender } = payload;
-  
+
+  console.log(`Processing issue comment: ${action} on issue #${issue.number} by ${sender.login}`);
+
   // Find linked project repositories for this repository
   const linkedRepos = await db
     .select({
@@ -527,10 +531,32 @@ async function processIssueCommentEvent(payload: any) {
     .from(projectRepositories)
     .where(eq(projectRepositories.githubRepoId, repository.id.toString()));
 
-  if (linkedRepos.length === 0) return;
+  if (linkedRepos.length === 0) {
+    console.log('No linked repositories found for issue comment');
+    return;
+  }
 
-  // Record comment activity
+  // Find the GitHub issue URL to match with external task links
+  const issueUrl = `${repository.html_url}/issues/${issue.number}`;
+
+  // Find linked tasks for this GitHub issue
+  const linkedTasks = await db
+    .select({
+      taskId: externalTaskLinks.taskId,
+      taskTitle: tasks.title,
+    })
+    .from(externalTaskLinks)
+    .innerJoin(tasks, eq(externalTaskLinks.taskId, tasks.id))
+    .where(and(
+      eq(externalTaskLinks.externalUrl, issueUrl),
+      eq(externalTaskLinks.linkType, 'github_issue')
+    ));
+
+  console.log(`Found ${linkedTasks.length} linked tasks for GitHub issue ${issueUrl}`);
+
+  // Record comment activity and sync to linked tasks
   for (const repo of linkedRepos) {
+    // Record the activity
     await db.insert(githubActivities).values({
       projectRepositoryId: repo.id,
       activityType: `comment_${action}`,
@@ -542,11 +568,64 @@ async function processIssueCommentEvent(payload: any) {
         issueNumber: issue.number,
         commentAuthor: sender.login,
         action: action,
-        commentBody: comment.body.substring(0, 200), // Truncate long comments
+        commentBody: comment.body?.substring(0, 200) || '', // Truncate long comments
+        syncedToTasks: linkedTasks.length > 0
       },
       githubCreatedAt: new Date(),
     });
+
+    // Sync comment to linked SprintIQ tasks
+    for (const linkedTask of linkedTasks) {
+      try {
+        // Check if this GitHub comment already exists in SprintIQ
+        const existingComments = await db
+          .select()
+          .from(comments)
+          .where(and(
+            eq(comments.taskId, linkedTask.taskId),
+            eq(comments.content, comment.body || ''),
+            eq(comments.createdAt, new Date(comment.created_at))
+          ))
+          .limit(1);
+
+        if (existingComments.length === 0) {
+          // Create the comment in SprintIQ
+          await db.insert(comments).values({
+            taskId: linkedTask.taskId,
+            authorId: sender.login, // We'll use GitHub username as author ID for now
+            content: comment.body || '',
+            createdAt: new Date(comment.created_at)
+          });
+
+          console.log(`Synced GitHub comment ${comment.id} to SprintIQ task ${linkedTask.taskId}`);
+
+          // Also record this as task activity
+          await db.insert(githubActivities).values({
+            projectRepositoryId: repo.id,
+            taskId: linkedTask.taskId,
+            activityType: 'github_comment_synced',
+            actorLogin: sender.login,
+            title: 'GitHub comment synced to task',
+            description: `Comment from GitHub issue #${issue.number} synced to task`,
+            metadata: {
+              repository: repository.full_name,
+              issueNumber: issue.number,
+              commentId: comment.id,
+              commentAuthor: sender.login,
+              taskTitle: linkedTask.taskTitle
+            },
+            githubCreatedAt: new Date(),
+          });
+        } else {
+          console.log(`GitHub comment ${comment.id} already exists in SprintIQ task ${linkedTask.taskId}`);
+        }
+      } catch (error) {
+        console.error(`Error syncing comment to task ${linkedTask.taskId}:`, error);
+      }
+    }
   }
+
+  console.log(`Successfully processed issue comment webhook`);
 }
 
 // Process pull request review events

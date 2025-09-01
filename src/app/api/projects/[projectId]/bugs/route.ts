@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/db';
 import { bugs } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export async function GET(_: NextRequest, { params }: { params: { projectId: string } }) {
   await requireAuth();
@@ -15,9 +15,21 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
   const user = await requireAuth();
   const projectId = params.projectId;
   const data = await req.json();
+
+  // Get the next project bug ID
+  const lastBug = await db
+    .select()
+    .from(bugs)
+    .where(eq(bugs.projectId, projectId))
+    .orderBy(desc(bugs.projectBugId))
+    .limit(1);
+
+  const nextProjectBugId = lastBug.length > 0 ? lastBug[0].projectBugId + 1 : 1;
+
   const [created] = await db
     .insert(bugs)
     .values({
+      projectBugId: nextProjectBugId,
       title: data.title,
       description: data.description ?? null,
       status: data.status ?? 'open',

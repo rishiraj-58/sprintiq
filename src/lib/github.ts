@@ -108,6 +108,52 @@ export class GitHubService {
     });
   }
 
+  // Public method to get PR reviews
+  async getPullRequestReviews(owner: string, repo: string, pullNumber: number) {
+    return await this.octokit.rest.pulls.listReviews({
+      owner,
+      repo,
+      pull_number: pullNumber
+    });
+  }
+
+  // Public method to get PR review comments
+  async getPullRequestReviewComments(owner: string, repo: string, pullNumber: number) {
+    return await this.octokit.rest.pulls.listReviewComments({
+      owner,
+      repo,
+      pull_number: pullNumber
+    });
+  }
+
+  // Public method to get general PR comments
+  async getPullRequestComments(owner: string, repo: string, pullNumber: number) {
+    return await this.octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: pullNumber
+    });
+  }
+
+  // Public method to get issue comments
+  async getIssueComments(owner: string, repo: string, issueNumber: number) {
+    return await this.octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: issueNumber
+    });
+  }
+
+  // Public method to create issue comment
+  async createIssueComment(owner: string, repo: string, issueNumber: number, body: string) {
+    return await this.octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body
+    });
+  }
+
   // Get issues for a specific repository
   async getRepositoryIssues(owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') {
     try {

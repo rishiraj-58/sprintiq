@@ -2,7 +2,7 @@
 import http from 'http';
 import { Server } from 'socket.io';
 
-const port = process.env.SOCKET_PORT || 4001;
+const port = process.env.PORT || 4001;
 
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/notify') {
@@ -33,7 +33,11 @@ const server = http.createServer((req, res) => {
 
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: [
+      "http://localhost:3000", // Development
+      "https://sprintiq-git-main-rishiraj-58.vercel.app", // Vercel deployment (update with your actual Vercel URL)
+      "https://sprintiq.vercel.app" // Production Vercel URL (update if different)
+    ],
   },
 });
 

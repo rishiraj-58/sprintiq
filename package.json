@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "socket": "node src/lib/socket-server.mjs",
+    "start:socket": "node src/lib/socket-server.mjs",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push:pg",

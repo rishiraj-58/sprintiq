@@ -1,9 +1,5 @@
 {
-  "buildCommand": "rm -rf .next .swc node_modules && npm install && npm run build",
-  "outputDirectory": ".next",
-  "framework": "nextjs",
-  "installCommand": "rm -rf node_modules package-lock.json && npm install --no-cache",
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next", 
+  "framework": "nextjs"
 }

@@ -2,10 +2,5 @@
   "buildCommand": "rm -rf .next && npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "rm -rf node_modules package-lock.json && npm install",
-  "functions": {
-    "src/app/api/**/*.ts": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  "installCommand": "rm -rf node_modules package-lock.json && npm install"
 }

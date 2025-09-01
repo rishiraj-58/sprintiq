@@ -25,7 +25,7 @@ import { SubTasks } from '@/components/tasks/SubTasks';
 import { LinkedTasks } from '@/components/tasks/LinkedTasks';
 import { History } from '@/components/tasks/History';
 // Import the UnifiedActivityFeed component for displaying task activities
-import { UnifiedActivityFeed } from '@/components/tasks/UnifiedActivityFeed';
+import { UnifiedActivityFeed } from '../../../components/tasks/UnifiedActivityFeed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {

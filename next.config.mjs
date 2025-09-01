@@ -5,14 +5,12 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
-  // Allow static HTML export when env var is set (used for CI builds)
-  output: process.env.CI ? 'export' : undefined,
-  // Disable image optimization during static export
-  images: process.env.CI 
-    ? { unoptimized: true } 
-    : { 
-        domains: ['flowbite.s3.amazonaws.com'],
-      },
+  // Disable static export for Vercel deployment (we need API routes)
+  // output: process.env.CI ? 'export' : undefined,
+  // Image configuration for Vercel deployment
+  images: { 
+    domains: ['flowbite.s3.amazonaws.com'],
+  },
   // For CI environments, minimize webpack optimization to prevent issues
   webpack: (config, { isServer }) => {
     if (process.env.CI) {

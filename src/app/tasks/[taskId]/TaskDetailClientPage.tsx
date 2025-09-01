@@ -24,8 +24,8 @@ import { TaskAttachmentUploader } from '@/components/tasks/TaskAttachmentUploade
 import { SubTasks } from '@/components/tasks/SubTasks';
 import { LinkedTasks } from '@/components/tasks/LinkedTasks';
 import { History } from '@/components/tasks/History';
-// Import the UnifiedActivityFeed component for displaying task activities
-import { UnifiedActivityFeed } from '../../../components/tasks/UnifiedActivityFeed';
+// Import the ActivityFeed component for displaying task activities
+import { ActivityFeed } from '../../../components/tasks/ActivityFeed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -690,7 +690,7 @@ export function TaskDetailClientPage({ task, authError }: TaskDetailClientPagePr
           </Card>
 
           {/* Unified Activity Feed */}
-          <UnifiedActivityFeed taskId={task.id} workspaceId={task.workspaceId} />
+          <ActivityFeed taskId={task.id} workspaceId={task.workspaceId} />
 
           {/* Subtasks */}
           <SubTasks taskId={task.id} workspaceId={task.workspaceId} />

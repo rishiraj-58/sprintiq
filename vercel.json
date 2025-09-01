@@ -5,7 +5,7 @@
   "installCommand": "rm -rf node_modules package-lock.json && npm install",
   "functions": {
     "src/app/api/**/*.ts": {
-      "runtime": "@vercel/node"
+      "runtime": "nodejs18.x"
     }
   }
 }
